@@ -31,10 +31,15 @@ export const MODEL_CONFIGS = {
   },
 };
 
+import kleur from 'kleur';
+
 export const DEFAULT_SYSTEM_PROMPT = [
   'You are Oracle, a focused one-shot problem solver.',
   'Emphasize direct answers, cite any files referenced, and clearly note when the search tool was used.',
 ].join(' ');
+const isTty = process.stdout.isTTY;
+const dim = (text) => (isTty ? kleur.dim(text) : text);
+const bold = (text) => (isTty ? kleur.bold(text) : text);
 
 const TOKENIZER_OPTIONS = { allowedSpecial: 'all' };
 
@@ -294,7 +299,7 @@ export async function runOracle(options, deps = {}) {
   if (!options.preview) {
     log(headerLine);
     if (options.model === 'gpt-5-pro') {
-      log(chalk.dim('Pro is thinking, this can take up to 10 minutes...'));
+      log(dim('Pro is thinking, this can take up to 10 minutes...'));
     }
     if (options.sessionId) {
       log(`Session ID: ${options.sessionId}`);
@@ -344,6 +349,15 @@ export async function runOracle(options, deps = {}) {
   const stream = await openAiClient.responses.stream(requestBody);
 
   let sawTextDelta = false;
+  const reasoningMode = options.showReasoning ?? 'auto';
+  const reasoningLog = options.reasoningLog ?? ((text) => log(dim(text)));
+  const shouldRenderReasoning = (mode) => {
+    if (mode === 'off') return false;
+    if (mode === 'on') return true;
+    return options.model === 'gpt-5-pro' && isTty;
+  };
+  const renderReasoning = shouldRenderReasoning(reasoningMode);
+
   let answerHeaderPrinted = false;
   const ensureAnswerHeader = () => {
     if (!options.silent && !answerHeaderPrinted) {
@@ -354,7 +368,9 @@ export async function runOracle(options, deps = {}) {
 
   try {
     for await (const event of stream) {
-      if (event.type === 'response.output_text.delta') {
+      if (renderReasoning && event.type === 'response.reasoning.delta') {
+        reasoningLog(event.delta);
+      } else if (event.type === 'response.output_text.delta') {
         sawTextDelta = true;
         ensureAnswerHeader();
         if (!options.silent) {

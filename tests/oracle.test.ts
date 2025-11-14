@@ -196,7 +196,8 @@ describe('runOracle streaming output', () => {
 
     expect(writes).toEqual([]);
     expect(logs[0].startsWith('Oracle (')).toBe(true);
-    expect(logs[1].startsWith('Finished in ')).toBe(true);
+    const finishedLine = logs.find((line) => line.startsWith('Finished in '));
+    expect(finishedLine).toBeDefined();
   });
 });
 

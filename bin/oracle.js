@@ -25,6 +25,7 @@ program
   .option('--preview', 'Preview the request and token usage without making an API call.', false)
   .option('--preview-json', 'When using --preview, also dump the full JSON payload.', false)
   .addOption(new Option('--exec-session <id>').hideHelp())
+.option('--show-reasoning [mode]', 'Control reasoning output (auto | on | off).', 'auto')
   .option('--render-markdown', 'Emit the assembled markdown bundle for prompt + files and exit.', false)
   .showHelpAfterError('(use --help for usage)');
 
@@ -65,6 +66,7 @@ ${dim(' •')} This CLI is tuned for tough questions. Attach source files for be
 ${dim(' •')} The model has no built-in knowledge of your project—start each run with a sentence or two about the architecture, key components, and why you’re asking the question if that context matters.
 ${dim(' •')} Run ${bold('--files-report')} to see per-file token impact before spending money.
 ${dim(' •')} Non-preview runs spawn detached sessions so requests keep running even if your terminal closes.
+${dim(' •')} GPT-5 Pro exposes \"reasoning\" content. It is shown automatically on rich TTYs (dimmed) but you can force it on/off via --show-reasoning.`);
 
 ${bold('Examples')}
 ${bold('  oracle')} --prompt "Summarize risks" --file docs/risk.md --files-report --preview
