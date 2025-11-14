@@ -326,7 +326,7 @@ describe('runOracle file reports', () => {
     );
 
     expect(logs[0].startsWith('Oracle (')).toBe(true);
-    const fileLogIndex = logs.findIndex((line) => line === 'File Token Usage');
+    const fileLogIndex = logs.indexOf('File Token Usage');
     expect(fileLogIndex).toBeGreaterThan(-1);
     expect(logs.some((line) => line.includes('note.txt'))).toBe(true);
 

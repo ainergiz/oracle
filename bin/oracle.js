@@ -5,7 +5,6 @@ import chalk from 'chalk';
 import kleur from 'kleur';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 import { ensureSessionStorage, initializeSession, updateSessionMetadata, readSessionMetadata, listSessionsMetadata, filterSessionsByRange, createSessionLogWriter, readSessionLog, wait, SESSIONS_DIR } from '../src/sessionManager.js';
 import { runOracle, MODEL_CONFIGS, parseIntOption, renderPromptMarkdown } from '../src/oracle.js';
 

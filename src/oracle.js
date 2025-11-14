@@ -6,7 +6,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { performance } from 'node:perf_hooks';
-import pkg from '../package.json' assert { type: 'json' };
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
 
 export const MODEL_CONFIGS = {
   'gpt-5-pro': {
@@ -39,7 +42,6 @@ export const DEFAULT_SYSTEM_PROMPT = [
 ].join(' ');
 const isTty = process.stdout.isTTY;
 const dim = (text) => (isTty ? kleur.dim(text) : text);
-const bold = (text) => (isTty ? kleur.bold(text) : text);
 
 const TOKENIZER_OPTIONS = { allowedSpecial: 'all' };
 
@@ -69,7 +71,7 @@ async function expandToFiles(targetPath, fsModule) {
   let stats;
   try {
     stats = await fsModule.stat(targetPath);
-  } catch (error) {
+  } catch (_error) {
     throw new Error(`Missing file or directory: ${targetPath}`);
   }
   if (stats.isFile()) {
@@ -447,7 +449,6 @@ export async function runOracle(options, deps = {}) {
 export async function renderPromptMarkdown(options, deps = {}) {
   const cwd = deps.cwd ?? process.cwd();
   const fsModule = deps.fs ?? fs;
-  const modelConfig = MODEL_CONFIGS[options.model] ?? MODEL_CONFIGS['gpt-5-pro'];
   const files = await readFiles(options.file ?? [], { cwd, fsModule });
   const sections = createFileSections(files, cwd);
   const systemPrompt = options.system?.trim() || DEFAULT_SYSTEM_PROMPT;
