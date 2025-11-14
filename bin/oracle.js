@@ -109,6 +109,7 @@ async function main() {
 
   if (process.argv.length <= 2) {
     program.help({ error: false });
+    return;
   }
 
   if (options.session) {

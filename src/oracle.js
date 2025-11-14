@@ -341,14 +341,19 @@ export async function runOracle(options, deps = {}) {
   const stream = await openAiClient.responses.stream(requestBody);
 
   let sawTextDelta = false;
-  if (!options.silent) {
-    log(chalk.bold('Answer:'));
-  }
+  let answerHeaderPrinted = false;
+  const ensureAnswerHeader = () => {
+    if (!options.silent && !answerHeaderPrinted) {
+      log(chalk.bold('Answer:'));
+      answerHeaderPrinted = true;
+    }
+  };
 
   try {
     for await (const event of stream) {
       if (event.type === 'response.output_text.delta') {
         sawTextDelta = true;
+        ensureAnswerHeader();
         if (!options.silent) {
           write(event.delta);
         }
@@ -374,6 +379,7 @@ export async function runOracle(options, deps = {}) {
     if (sawTextDelta) {
       write('\n\n');
     } else {
+      ensureAnswerHeader();
       log(answerText || chalk.dim('(no text output)'));
       log('');
     }
