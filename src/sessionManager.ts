@@ -31,6 +31,13 @@ export interface BrowserMetadata {
   runtime?: BrowserRuntimeMetadata;
 }
 
+export interface SessionResponseMetadata {
+  id?: string;
+  requestId?: string | null;
+  status?: string;
+  incompleteReason?: string | null;
+}
+
 export interface StoredRunOptions {
   prompt?: string;
   file?: string[];
@@ -66,6 +73,7 @@ export interface SessionMetadata {
   errorMessage?: string;
   elapsedMs?: number;
   browser?: BrowserMetadata;
+  response?: SessionResponseMetadata;
 }
 
 interface SessionLogWriter {

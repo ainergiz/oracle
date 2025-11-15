@@ -34,8 +34,10 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   formatElapsed,
   TOKENIZER_OPTIONS,
+  OracleResponseError,
+  extractResponseMetadata,
 } from '../src/oracle.js';
-import type { ModelName, PreviewMode, RunOracleOptions } from '../src/oracle.js';
+import type { ModelName, PreviewMode, RunOracleOptions, OracleResponseMetadata } from '../src/oracle.js';
 import { runBrowserMode, CHATGPT_URL, DEFAULT_MODEL_TARGET, parseDuration } from '../src/browserMode.js';
 
 interface CliOptions extends OptionValues {
@@ -580,6 +582,7 @@ async function performSessionRun({
           config: browserConfig,
           runtime: result.runtime,
         },
+        response: undefined,
       });
       return;
     }
@@ -596,16 +599,23 @@ async function performSessionRun({
       completedAt: new Date().toISOString(),
       usage: result.usage,
       elapsedMs: result.elapsedMs,
+      response: extractResponseMetadata(result.response),
     });
   } catch (error: unknown) {
     const message = formatError(error);
     log(`ERROR: ${message}`);
+    const responseMetadata = error instanceof OracleResponseError ? error.metadata : undefined;
+    const metadataLine = formatResponseMetadata(responseMetadata);
+    if (metadataLine) {
+      log(dim(`Response metadata: ${metadataLine}`));
+    }
     await updateSessionMetadata(sessionMeta.id, {
       status: 'error',
       completedAt: new Date().toISOString(),
       errorMessage: message,
       mode,
       browser: browserConfig ? { config: browserConfig } : undefined,
+      response: responseMetadata,
     });
     throw error;
   }
@@ -746,6 +756,10 @@ async function attachSession(sessionId: string): Promise<void> {
   console.log(`Created: ${metadata.createdAt}`);
   console.log(`Status: ${metadata.status}`);
   console.log(`Model: ${metadata.model}`);
+  const responseSummary = formatResponseMetadata(metadata.response);
+  if (responseSummary) {
+    console.log(dim(`Response: ${responseSummary}`));
+  }
 
   let lastLength = 0;
   const printNew = async () => {
@@ -783,6 +797,26 @@ async function attachSession(sessionId: string): Promise<void> {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatResponseMetadata(metadata?: OracleResponseMetadata): string | null {
+  if (!metadata) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (metadata.responseId) {
+    parts.push(`response=${metadata.responseId}`);
+  }
+  if (metadata.requestId) {
+    parts.push(`request=${metadata.requestId}`);
+  }
+  if (metadata.status) {
+    parts.push(`status=${metadata.status}`);
+  }
+  if (metadata.incompleteReason) {
+    parts.push(`incomplete=${metadata.incompleteReason}`);
+  }
+  return parts.length > 0 ? parts.join(' | ') : null;
 }
 
 function buildReattachLine(metadata: SessionMetadata): string | null {

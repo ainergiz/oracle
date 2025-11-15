@@ -172,6 +172,7 @@ interface ResponseOutputItem {
 }
 
 export interface OracleResponse {
+  id?: string;
   status?: string;
   error?: { message?: string };
   incomplete_details?: { reason?: string };
@@ -183,6 +184,26 @@ export interface OracleResponse {
   };
   output_text?: string[];
   output?: ResponseOutputItem[];
+  _request_id?: string | null;
+}
+
+export interface OracleResponseMetadata {
+  responseId?: string;
+  requestId?: string | null;
+  status?: string;
+  incompleteReason?: string | null;
+}
+
+export class OracleResponseError extends Error {
+  readonly metadata: OracleResponseMetadata;
+  readonly response?: OracleResponse;
+
+  constructor(message: string, response?: OracleResponse) {
+    super(message);
+    this.name = 'OracleResponseError';
+    this.response = response;
+    this.metadata = extractResponseMetadata(response);
+  }
 }
 
 const pkgPath = resolvePackageJsonPath(import.meta.url);
@@ -477,11 +498,27 @@ export function buildRequestBody({
   };
 }
 
+export function extractResponseMetadata(response?: OracleResponse | null): OracleResponseMetadata {
+  if (!response) {
+    return {};
+  }
+  const metadata: OracleResponseMetadata = {
+    responseId: response.id,
+    status: response.status,
+    incompleteReason: response.incomplete_details?.reason ?? undefined,
+  };
+  const requestId = (response as { _request_id?: string | null })._request_id;
+  if (requestId !== undefined) {
+    metadata.requestId = requestId;
+  }
+  return metadata;
+}
+
 function createDefaultClientFactory(): (apiKey: string) => ClientLike {
   return (key: string): ClientLike => {
     const instance = new OpenAI({
       apiKey: key,
-      timeout: 15 * 60 * 1000,
+      timeout: 20 * 60 * 1000,
     });
     return {
       responses: {
@@ -659,7 +696,7 @@ export async function runOracle(options: RunOracleOptions, deps: RunOracleDeps =
 
   if (response.status && response.status !== 'completed') {
     const detail = response.error?.message || response.incomplete_details?.reason || response.status;
-    throw new Error(`Response did not complete: ${detail}`);
+    throw new OracleResponseError(`Response did not complete: ${detail}`, response);
   }
 
   const answerText = extractTextOutput(response);

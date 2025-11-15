@@ -34,6 +34,7 @@ chalk.level = 0;
 type TempFile = { dir: string; filePath: string };
 
 interface MockResponse extends OracleResponse {
+  id: string;
   status: string;
   usage: {
     input_tokens: number;
@@ -45,6 +46,7 @@ interface MockResponse extends OracleResponse {
     type: 'message';
     content: Array<{ type: 'text'; text: string }>;
   }>;
+  _request_id?: string | null;
 }
 
 async function createTempFile(contents: string): Promise<TempFile> {
@@ -623,6 +625,7 @@ function createMockFs(fileEntries: Record<string, string>): MinimalFsModule {
 
 function buildResponse(): MockResponse {
   return {
+    id: 'resp_test_123',
     status: 'completed',
     usage: {
       input_tokens: 10,
@@ -630,6 +633,8 @@ function buildResponse(): MockResponse {
       reasoning_tokens: 1,
       total_tokens: 16,
     },
+    _request_id: 'req_test_456',
+    incomplete_details: null,
     output: [
       {
         type: 'message',
