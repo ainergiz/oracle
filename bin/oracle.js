@@ -16,7 +16,7 @@ import {
   SESSIONS_DIR,
   deleteSessionsOlderThan,
 } from '../src/sessionManager.js';
-import { runOracle, MODEL_CONFIGS, parseIntOption, renderPromptMarkdown } from '../src/oracle.js';
+import { runOracle, MODEL_CONFIGS, parseIntOption, renderPromptMarkdown, readFiles } from '../src/oracle.js';
 
 const VERSION = '1.0.0';
 
@@ -198,6 +198,10 @@ async function runRootCommand(options) {
 
   if (!options.prompt) {
     throw new Error('Prompt is required when starting a new session.');
+  }
+
+  if (options.file && options.file.length > 0) {
+    await readFiles(options.file, { cwd: process.cwd() });
   }
 
   await ensureSessionStorage();

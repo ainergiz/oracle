@@ -418,6 +418,13 @@ describe('oracle utility helpers', () => {
     expect(unchanged).toEqual(['start']);
   });
 
+  test('collectPaths honors multiple flags and comma-separated batches', () => {
+    const initial = collectPaths(['src/docs', 'tests,examples'], []);
+    expect(initial).toEqual(['src/docs', 'tests', 'examples']);
+    const appended = collectPaths(['more', 'assets,notes'], initial);
+    expect(appended).toEqual(['src/docs', 'tests', 'examples', 'more', 'assets', 'notes']);
+  });
+
   test('parseIntOption handles undefined and invalid values', () => {
     expect(parseIntOption(undefined)).toBeUndefined();
     expect(parseIntOption('42')).toBe(42);
@@ -438,6 +445,15 @@ describe('oracle utility helpers', () => {
 
       const expandedFiles = await readFiles([dir], { cwd: dir });
       expect(expandedFiles.map((file) => path.basename(file.path))).toContain('note.txt');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('readFiles rejects immediately when a referenced file is missing', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'oracle-readfiles-missing-'));
+    try {
+      await expect(readFiles(['ghost.txt'], { cwd: dir })).rejects.toThrow(/Missing file or directory/i);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
