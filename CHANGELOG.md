@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - README now recommends preferring API engine for reliability and longer uninterrupted runs when an API key is available.
 - Session rendering now uses Markdansi (micromark/mdast-based), removing markdown-it-terminal and eliminating HTML leakage/crashes during replays.
 - Added a local Markdansi type shim for now; switch to official types once the npm package ships them.
+- Markdansi renderer now enables color/hyperlinks when TTY by default and auto-renders sessions unless the user explicitly disables it.
 
 ## 1.0.8 — 2025-11-16
 
