@@ -39,7 +39,10 @@ export async function handleSessionCommand(
   if (sessionOptions.verboseRender) {
     process.env.ORACLE_VERBOSE_RENDER = '1';
   }
-  const autoRender = sessionOptions.render === undefined && sessionOptions.renderMarkdown === undefined && process.stdout.isTTY;
+  const renderSource = command.getOptionValueSource?.('render');
+  const renderMarkdownSource = command.getOptionValueSource?.('renderMarkdown');
+  const renderExplicit = renderSource === 'cli' || renderMarkdownSource === 'cli';
+  const autoRender = !renderExplicit && process.stdout.isTTY;
   const clearRequested = Boolean(sessionOptions.clear || sessionOptions.clean);
   if (clearRequested) {
     if (sessionId) {
