@@ -32,9 +32,11 @@
       "command": "/Users/steipete/Projects/iterm-mcp/build/index.js"
     },
     "oracle-local": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "../dist/bin/oracle-mcp.js"
+        "-y",
+        "@steipete/oracle",
+        "oracle-mcp"
       ],
       "root": ".."
     }

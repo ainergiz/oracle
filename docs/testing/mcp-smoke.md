@@ -11,7 +11,7 @@ Use these steps to validate CLI + MCP end-to-end before releasing.
 Shared prereqs
 - `pnpm build` (ensures `dist/bin/oracle-mcp.js` exists)
 - `OPENAI_API_KEY` set in env
-- `config/mcporter.json` contains the `oracle-local` entry pointing to `node ../dist/bin/oracle-mcp.js` (already committed).
+- `config/mcporter.json` contains the `oracle-local` entry pointing to `npx -y @steipete/oracle oracle-mcp` (already committed).
 - mcporter available at `/Users/steipete/Library/pnpm/global/5/node_modules/.bin/mcporter`
 - For browser runs: Chrome installed; macOS host (headful).
 - macOS notifications: `vendor/oracle-notifier/OracleNotifier.app` ships with the package (preferred); falls back to toasted-notifier if missing/broken.

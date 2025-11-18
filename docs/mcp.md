@@ -27,8 +27,8 @@
   {
     "name": "oracle",
     "type": "stdio",
-    "command": "oracle-mcp",
-    "args": []
+    "command": "npx",
+    "args": ["-y", "@steipete/oracle", "oracle-mcp"]
   }
   ```
 - Tools and resources operate on the same session store as `oracle status|session`.

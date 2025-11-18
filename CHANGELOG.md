@@ -29,8 +29,8 @@ All notable changes to this project will be documented in this file.
   {
     "name": "oracle-local",
     "type": "stdio",
-    "command": "node",
-    "args": ["../dist/bin/oracle-mcp.js"]
+    "command": "npx",
+    "args": ["-y", "@steipete/oracle", "oracle-mcp"]
   }
   ```
 - Claude Code (global/user scope):  
