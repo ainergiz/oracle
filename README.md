@@ -76,7 +76,7 @@ oracle session <id>                 # replay a run locally
 
 ## Configuration
 
-Put per-user defaults in `~/.oracle/config.json5` (JSON5 allows comments). Example settings cover default engine/model, notifications, browser defaults, and prompt suffixes. See `docs/configuration.md` for a complete example and precedence.
+Put per-user defaults in `~/.oracle/config.json` (parsed as JSON5, so comments/trailing commas are fine). Example settings cover default engine/model, notifications, browser defaults, and prompt suffixes. See `docs/configuration.md` for a complete example and precedence.
 
 ## Flags you’ll actually use
 

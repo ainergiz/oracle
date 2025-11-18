@@ -35,7 +35,7 @@ export interface UserConfig {
 }
 
 const ORACLE_HOME = process.env.ORACLE_HOME_DIR ?? path.join(os.homedir(), '.oracle');
-const CONFIG_PATH = path.join(ORACLE_HOME, 'config.json5');
+const CONFIG_PATH = path.join(ORACLE_HOME, 'config.json');
 
 export interface LoadConfigResult {
   config: UserConfig;

@@ -15,7 +15,7 @@ describe('loadUserConfig', () => {
   });
 
   it('parses JSON5 config with comments', async () => {
-    const configPath = path.join(tempDir, 'config.json5');
+    const configPath = path.join(tempDir, 'config.json');
     await fs.writeFile(
       configPath,
       `// comment\n{

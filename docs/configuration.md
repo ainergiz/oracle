@@ -1,8 +1,8 @@
 # Local configuration (JSON5)
 
-Oracle reads an optional per-user config from `~/.oracle/config.json5`. The file uses JSON5, so trailing commas and comments are allowed.
+Oracle reads an optional per-user config from `~/.oracle/config.json`. The file uses JSON5 parsing, so trailing commas and comments are allowed.
 
-## Example (`~/.oracle/config.json5`)
+## Example (`~/.oracle/config.json`)
 
 ```json5
 {
@@ -37,6 +37,6 @@ Oracle reads an optional per-user config from `~/.oracle/config.json5`. The file
 
 ## Precedence
 
-CLI flags → environment (`ORACLE_*`, `OPENAI_API_KEY`, etc.) → `config.json5` → built-in defaults.
+CLI flags → environment (`ORACLE_*`, `OPENAI_API_KEY`, etc.) → `config.json` → built-in defaults.
 
 If the config is missing or invalid, Oracle falls back to defaults and prints a warning for parse errors.
