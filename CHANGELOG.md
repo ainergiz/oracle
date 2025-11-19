@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## 1.3.0 — 2025-11-19
 
+> **Release status:** Published to npm (`@steipete/oracle@1.3.0`), tag `v1.3.0` pushed. GitHub release draft exists at `v1.3.0` (notes in repo).
+
 ### Added
 - Native Azure OpenAI support! Set `AZURE_OPENAI_ENDPOINT` (plus `AZURE_OPENAI_API_KEY` and optionally `AZURE_OPENAI_DEPLOYMENT`/`AZURE_OPENAI_API_VERSION`) or use the new CLI flags (`--azure-endpoint`, `--azure-deployment`, etc.) to switch automatically to the Azure client.
 - **Gemini 3 Pro Support**: Use Google's latest model via `oracle --model gemini`. Requires `GEMINI_API_KEY`.
