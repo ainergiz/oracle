@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { syncCookies, ChromeCookieSyncError } from '../../src/browser/cookies.js';
 import type { ChromeClient } from '../../src/browser/types.js';
 
-const loadChromeCookies = vi.fn();
+const loadChromeCookies = vi.hoisted(() => vi.fn());
 vi.mock('../../src/browser/chromeCookies.ts', () => ({ loadChromeCookies }));
 
 const logger = vi.fn();

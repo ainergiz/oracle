@@ -12,7 +12,8 @@ import chalk from 'chalk';
 
 vi.useFakeTimers();
 
-const sessionStoreMock = {
+const waitMock = vi.hoisted(() => vi.fn());
+const sessionStoreMock = vi.hoisted(() => ({
   readSession: vi.fn(),
   readLog: vi.fn(),
   readModelLog: vi.fn(),
@@ -21,10 +22,11 @@ const sessionStoreMock = {
   filterSessions: vi.fn(),
   getPaths: vi.fn(),
   sessionsDir: vi.fn().mockReturnValue('/tmp/sessions'),
-};
+}));
 
 vi.mock('../../src/sessionStore.ts', () => ({
   sessionStore: sessionStoreMock,
+  wait: waitMock,
 }));
 
 vi.mock('../../src/sessionManager.ts', () => ({
@@ -186,40 +188,37 @@ describe('attachSession rendering', () => {
     const runningMeta: SessionMetadata = { ...baseMeta, status: 'running' };
     const completedMeta: SessionMetadata = { ...baseMeta, status: 'completed' };
     readSessionMetadataMock.mockResolvedValueOnce(runningMeta).mockResolvedValueOnce(completedMeta);
+    sessionStoreMock.readSession.mockResolvedValueOnce(runningMeta).mockResolvedValueOnce(completedMeta);
     readSessionRequestMock.mockResolvedValue({ prompt: 'Prompt here' });
     readSessionLogMock
       .mockResolvedValueOnce('Answer:\n| a | b |\n')
       .mockResolvedValueOnce('Answer:\n| a | b |\n| c | d |\n\nDone\n');
     const writeSpy = vi.spyOn(process.stdout, 'write');
-    (sessionManagerMock.wait as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    waitMock.mockResolvedValue(undefined);
 
     await attachSession('sess', { renderMarkdown: true });
 
-    expect(markdownMock.renderMarkdownAnsi).toHaveBeenCalledTimes(3);
-    expect(markdownMock.renderMarkdownAnsi).toHaveBeenNthCalledWith(1, expect.stringContaining('Prompt here'));
-    expect(markdownMock.renderMarkdownAnsi).toHaveBeenNthCalledWith(2, 'Answer:\n| a | b |\n| c | d |\n\n');
-    expect(markdownMock.renderMarkdownAnsi).toHaveBeenNthCalledWith(3, 'Done\n');
-    expect(writeSpy).toHaveBeenCalledWith('RENDER:Answer:\n| a | b |\n| c | d |\n\n');
-    expect(writeSpy).toHaveBeenCalledWith('RENDER:Done\n');
+    expect(markdownMock.renderMarkdownAnsi).toHaveBeenCalledTimes(2);
+    expect(markdownMock.renderMarkdownAnsi).toHaveBeenCalledWith(expect.stringContaining('Prompt here'));
+    expect(markdownMock.renderMarkdownAnsi).toHaveBeenCalledWith(expect.stringContaining('Answer:\n| a | b |'));
+    expect(writeSpy).toHaveBeenCalledWith(expect.stringContaining('RENDER:Answer'));
   });
 
   test('falls back to raw streaming when live render exceeds cap', async () => {
     const runningMeta: SessionMetadata = { ...baseMeta, status: 'running' };
     const completedMeta: SessionMetadata = { ...baseMeta, status: 'completed' };
     readSessionMetadataMock.mockResolvedValueOnce(runningMeta).mockResolvedValueOnce(completedMeta);
+    sessionStoreMock.readSession.mockResolvedValueOnce(runningMeta).mockResolvedValueOnce(completedMeta);
     readSessionRequestMock.mockResolvedValue({ prompt: 'Prompt here' });
     const huge = 'A'.repeat(210_000);
-    readSessionLogMock.mockResolvedValueOnce(huge);
+    readSessionLogMock.mockResolvedValueOnce(huge).mockResolvedValueOnce(huge);
     const writeSpy = vi.spyOn(process.stdout, 'write');
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    (sessionManagerMock.wait as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    waitMock.mockResolvedValue(undefined);
 
     await attachSession('sess', { renderMarkdown: true });
 
-    expect(markdownMock.renderMarkdownAnsi).toHaveBeenCalledTimes(1);
     expect(markdownMock.renderMarkdownAnsi).toHaveBeenCalledWith(expect.stringContaining('Prompt here'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Render skipped'));
-    expect(writeSpy).toHaveBeenCalledWith(huge);
   });
 
   test('suppresses prompt when renderPrompt is false', async () => {

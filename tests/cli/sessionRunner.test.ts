@@ -17,7 +17,7 @@ vi.mock('../../src/cli/notifier.ts', () => ({
   deriveNotificationSettingsFromMetadata: vi.fn(() => ({ enabled: true, sound: false })),
 }));
 
-const sessionStoreMock = {
+const sessionStoreMock = vi.hoisted(() => ({
   updateSession: vi.fn(),
   createLogWriter: vi.fn(),
   updateModelRun: vi.fn(),
@@ -30,7 +30,7 @@ const sessionStoreMock = {
   getPaths: vi.fn(),
   readModelLog: vi.fn(),
   sessionsDir: vi.fn().mockReturnValue('/tmp/.oracle/sessions'),
-};
+}));
 
 vi.mock('../../src/sessionStore.ts', () => ({
   sessionStore: sessionStoreMock,
