@@ -47,7 +47,7 @@ export function supportsOscProgress(
 
 export function startOscProgress(options: OscProgressOptions = {}): () => void {
   const {
-    label = 'Waiting for OpenAI',
+    label = 'Waiting for API',
     targetMs = 10 * 60_000,
     write = (text) => process.stdout.write(text),
     indeterminate = false,
