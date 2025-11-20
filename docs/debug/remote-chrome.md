@@ -46,6 +46,7 @@ Actions taken on VM (tmux `vmssh`):
 - Port collisions: prior listeners on 49810 caused ECONNREFUSED/busy.
 - Remote model switch failed: remote Chrome likely not signed into ChatGPT; model picker couldn’t find “GPT-5.1 Pro”.
 - Keychain/cookie read now failing on VM: `loadChromeCookies` throws “Unknown error” when invoked from the server process (Node 25, SSH shell). When `oracle serve` runs from GUI Terminal it starts fine; under nohup/SSH it logs the rejection and remote runs hang.
+- New behavior (post-fix): `oracle serve` exits early if it cannot load host ChatGPT cookies after opening chatgpt.com for login; sign in on the host and restart the service.
 
 ## Next steps
 - On VM: start service in a clean shell with bun on PATH:
@@ -56,7 +57,7 @@ Actions taken on VM (tmux `vmssh`):
   ```
   Leave it running; verify with `lsof -nP -iTCP:49810 -sTCP:LISTEN`.
 - Sign into ChatGPT in the VM’s Chrome profile used by the service so model switching succeeds. (Currently we rely on host cookies only; client cookie shipping is disabled.)
-- If cookie loading keeps failing under SSH/nohup, start `oracle serve` from a GUI macOS session or switch to Node 20 to avoid Keychain issues.
+- If cookie loading keeps failing under SSH/nohup, start `oracle serve` from a GUI macOS session or switch to Node 20 to avoid Keychain issues. The service now exits early after opening chatgpt.com when no cookies are present—log in, then restart it.
 - Retry local command above; ensure service logs show incoming /runs and that the login probe passes (no login button).
 - Optional: switch to a fresh port/token (`oracle serve` with no args) to avoid lingering listeners.
 - Code change (2025-11-20): `loadChromeCookies` now probes the macOS Keychain with a timeout and fails fast instead of hanging when Keychain access is denied. Remote runs should now emit a clear error instead of a socket hang up if the service can’t read Chrome cookies; re-test the SSH/nohup scenario.

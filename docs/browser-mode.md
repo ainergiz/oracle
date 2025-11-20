@@ -111,6 +111,7 @@ Prefer to keep Chrome entirely on the remote Mac (no DevTools tunneling, no manu
    Access token: c4e5f9...
    ```
    Use `--host`, `--port`, or `--token` to override the defaults if needed.
+   If the host Chrome profile is not signed into ChatGPT, the service opens chatgpt.com for login and exits—sign in, then restart `oracle serve`.
 
 2. **Run from your laptop**
    ```bash
@@ -122,11 +123,11 @@ Prefer to keep Chrome entirely on the remote Mac (no DevTools tunneling, no manu
    ```
    - `--remote-host` points the CLI at the VM.
    - `--remote-token` matches the token printed by `oracle serve` (set `ORACLE_REMOTE_TOKEN` to avoid repeating it).
-   - Cookies are **not** transferred from your laptop. The remote host will reuse its own ChatGPT cookies; if none exist, the service opens ChatGPT in a browser window so you can sign in once, then reuses that session for subsequent runs.
+   - Cookies are **not** transferred from your laptop. The service requires the host Chrome profile to be signed in; if not, it opens chatgpt.com and exits so you can log in, then restart `oracle serve`.
 
 3. **What happens**
    - The CLI assembles the composed prompt + file bundle locally, sends them to the VM, and streams log lines/answer text back through the same HTTP connection.
-   - The remote host runs Chrome locally, pulls ChatGPT cookies from its own Chrome profile, and reuses them across runs while the service is up. If cookies are missing, it prompts you to sign in once on the host.
+   - The remote host runs Chrome locally, pulls ChatGPT cookies from its own Chrome profile, and reuses them across runs while the service is up. If cookies are missing, the service exits after opening chatgpt.com so you can sign in before restarting.
    - Background/detached sessions (`--no-wait`) are disabled in remote mode so the CLI can keep streaming output.
 
 4. **Stop the host**
