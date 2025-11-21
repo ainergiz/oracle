@@ -11,131 +11,99 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-Oracle gives your agents a simple, reliable way to **bundle a prompt plus the right files and hand them to another AI**. It currently speaks GPT-5.1 Pro (new default), GPT-5.1 Codex (API-only), and GPT-5.1; Pro and Codex Max runs can take up to an hour and often return remarkably strong answers.
+Oracle bundles your prompt + the right files into a markdown package the model can cite. One command feeds large, coherent context to GPT-5.1 Pro (default), GPT-5.1, or GPT-5.1 Codex (API-only). Attach whole directories, get token estimates/warnings, and optionally copy or render the bundle before sending.
 
-## Two engines, one CLI
+## What is Oracle?
+Think “one-shot context drop.” You point Oracle at the files that matter; it builds a structured markdown (SYSTEM/USER + `### File:` fenced sections), then either calls the API or drives ChatGPT in the browser—same flags, same session logs.
 
-- **API engine** — Calls the OpenAI Responses API. Needs `OPENAI_API_KEY`.
-- **Browser engine** — Automates ChatGPT in Chrome so you can use your Pro account directly. Toggle with `--engine browser`; no API key required.
-  - Duration flags such as `--browser-timeout` / `--browser-input-timeout` accept `ms`, `s`, `m`, or `h` (and you can chain them: `1h2m10s`). Defaults are 20 m / 30 s.
-  - Point browser runs at either the root ChatGPT homepage (`https://chatgpt.com/`) or a specific workspace/folder with `--chatgpt-url https://chatgpt.com/g/.../project` (config: `browser.chatgptUrl`).
-- **GPT-5.1 Codex** — `gpt-5.1-codex` (high reasoning) is available today via API. Codex Max isn’t exposed via API yet; once OpenAI flips the switch we’ll wire it up here. Codex models require `--engine api`.
-
-If you omit `--engine`, Oracle prefers the API engine when `OPENAI_API_KEY` is present; otherwise it falls back to browser mode. Switch explicitly with `-e, --engine {api|browser}` when you want to override the auto choice. Everything else (prompt assembly, file handling, session logging) stays the same.
-
-Note: Browser engine is considered experimental, requires an OpenAI Pro account and only works on macOS with Chrome.
-Windows/Linux browser support is in progress; until then, use `--engine api` or bundle files and paste manually.
-Your system password is needed to copy cookies. To skip Chrome/Keychain entirely, pass inline cookies via
-`--browser-inline-cookies <json|base64>` or `--browser-inline-cookies-file <path>` (fallback files at
-`~/.oracle/cookies.json` or `~/.oracle/cookies.base64`). API engine is stable and should be preferred.
-
-### Chromium-based browsers
-
-Want to launch Chromium or Microsoft Edge instead of Chrome? Override the executable with `--browser-chrome-path` (or `browser.chromePath` in config) and point cookie sync at the fork’s `Cookies` database via `--browser-cookie-path`. The full walkthrough—including sample paths for macOS/Linux/Windows—is in [docs/chromium-forks.md](docs/chromium-forks.md).
-
-## Quick start
+## Quick start (npx, no install)
 
 ```bash
-# One-off (no install)
-OPENAI_API_KEY=sk-... npx -y @steipete/oracle -p "Summarize the risk register" --file docs/risk-register.md docs/risk-matrix.md
+# API engine (recommended)
+OPENAI_API_KEY=sk-... npx -y @steipete/oracle -p "Review the TS data layer" --file "src/**/*.ts,!src/**/*.test.ts"
 
 # Browser engine (no API key)
-npx -y @steipete/oracle --engine browser -p "Summarize the risk register" --file docs/risk-register.md docs/risk-matrix.md
+npx -y @steipete/oracle --engine browser -p "Review the TS data layer" --file "src/**/*.ts,!src/**/*.test.ts"
 
-# Globs/exclusions
-npx -y @steipete/oracle -p "Review the TS data layer" --file "src/**/*.ts" --file "!src/**/*.test.ts"
-
-# Mixed glob + single file
-npx -y @steipete/oracle -p "Audit data layer" --file "src/**/*.ts" --file README.md
-
-# Dry-run (no API call) with summary estimate
-oracle --dry-run summary -p "Check release notes" --file docs/release-notes.md
-
-# Alternate base URL (LiteLLM, Azure, self-hosted gateways)
-OPENAI_API_KEY=sk-... oracle --base-url https://litellm.example.com/v1 -p "Summarize the risk register"
-
-# Inspect past sessions
-oracle status --clear --hours 168   # prune a week of cached runs
-oracle status                       # list runs; grab an ID
-oracle session <id>                 # replay a run locally
+# Sessions (list + reattach)
+npx -y @steipete/oracle status
+npx -y @steipete/oracle session <id>
 ```
 
-## How do I integrate this?
+**Recommendation:** Prefer API (default) or manual bundle/copy flows. Full browser automation is experimental (macOS + Chrome only today) and may be blocked by login/Cloudflare challenges.
 
-**CLI** (direct calls; great for CI or scripted tasks)
-- One-liner in CI: `OPENAI_API_KEY=sk-... npx -y @steipete/oracle --prompt "Smoke-check latest PR" --file src/ docs/ --preview summary`.
-- Package script: add `"oracle": "oracle --prompt \"Review the diff\" --file ."` to `package.json`, then run `OPENAI_API_KEY=... pnpm oracle`.
-- Don’t want to export the key? Inline works: `OPENAI_API_KEY=sk-... oracle -p "Quick check" --file src/`.
-
-**MCP** (tools + resources; mix-and-match with the CLI sessions)
-- Run the bundled stdio server: `pnpm mcp` (or `oracle-mcp`) after `pnpm build`. Tools: `consult`, `sessions`; resources: `oracle-session://{id}/{metadata|log|request}`. Details in [docs/mcp.md](docs/mcp.md).
-- mcporter config (stdio):
-  ```json
-  {
-    "name": "oracle",
-    "type": "stdio",
-    "command": "npx",
-    "args": ["-y", "@steipete/oracle", "oracle-mcp"]
-  }
-  ```
-- You can call the MCP tools against sessions created by the CLI (shared `~/.oracle/sessions`), and vice versa.
+## Manual handoff (no automation)
+- Copy + preview: `npx -y @steipete/oracle --copy --render -p "Your prompt" --file "src/**/*.ts,!src/**/*.test.ts"`
+  - Clipboard + colorized preview. Add `--render-plain` if you want unstyled text while copying.
+- Save to disk: `npx -y @steipete/oracle --render-plain -p "Your prompt" --file path/to/files > bundle.md`
+  - Plain markdown with SYSTEM/USER + fenced `### File:` sections, ready to paste into ChatGPT.
 
 ## Highlights
 
-- **Bundle once, reuse anywhere** — Prompt + files become a markdown package the model can cite.
-- **Flexible file selection** — Glob patterns and `!` excludes let you scoop up or skip files without scripting.
-- **Pro-friendly** — GPT-5.1 Pro background runs stay alive for ~10 minutes with reconnection + token/cost tracking.
-- **Two paths, one UX** — API or browser, same flags and session logs.
-- **Search on by default** — The model can ground answers with fresh citations.
-- **File safety** — Per-file token accounting and size guards; `--files-report` shows exactly what you’re sending.
-- **Readable previews** — `--preview` / `--render-markdown` let you inspect the bundle before spending.
+- Bundle once, reuse anywhere — prompt + files as cit-able markdown.
+- Flexible file selection — globs and `!` excludes, merged across repeated `--file` flags.
+- Pro-friendly — GPT-5.1 Pro background runs with reconnect + token/cost tracking.
+- Two paths, one UX — API or browser, same flags and session logs.
+- Safety — per-file tokens, size guardrails, `--files-report` when you need detail.
+- Preview/copy — `--render`, `--render-plain`, `--copy` for manual workflows.
 
-## Configuration
+## CLI usage (short form)
+- CI one-liner: `OPENAI_API_KEY=sk-... npx -y @steipete/oracle -p "Smoke-check latest PR" --file src/,docs/ --preview summary`
+- Background Pro run: `OPENAI_API_KEY=sk-... npx -y @steipete/oracle -p "Deep review" --file src/ --wait`
+- Sessions: `npx -y @steipete/oracle status` → `npx -y @steipete/oracle session <id>`
 
-Put per-user defaults in `~/.oracle/config.json` (parsed as JSON5, so comments/trailing commas are fine). Example settings cover default engine/model, notifications, browser defaults, and prompt suffixes. See `docs/configuration.md` for a complete example and precedence.
+## MCP usage
+- stdio server: `npx -y @steipete/oracle oracle-mcp` (tools: `consult`, `sessions`; resources: `oracle-session://{id}/{metadata|log|request}`). See [docs/mcp.md](docs/mcp.md).
+- mcporter snippet:
+  ```json
+  { "name": "oracle", "type": "stdio", "command": "npx", "args": ["-y", "@steipete/oracle", "oracle-mcp"] }
+  ```
 
-## Flags you’ll actually use
+## Prompting tips (what the CLI hints at)
+- Aim for 6–30 sentences; include stack, platform, versions, and why it matters.
+- Attach source (dirs beat single files) and label cross-repo paths so the model can cite them.
+- State expectations: summary vs deep dive, format, tone, constraints.
+- Call out prior attempts and suspected areas; include logs/errors next to the code.
+
+## Flags (most common)
 
 | Flag | Purpose |
 | --- | --- |
 | `-p, --prompt <text>` | Required prompt. |
-| `-f, --file <paths...>` | Attach files/dirs (supports globs and `!` excludes). |
-| `-e, --engine <api\|browser>` | Choose API or browser automation. Omitted: API when `OPENAI_API_KEY` is set, otherwise browser. |
-| `-m, --model <name>` | `gpt-5.1-pro` (default), `gpt-5.1`, `gpt-5.1-codex` (API-only), `claude-4.5-sonnet` (API id `claude-sonnet-4-5`), `claude-4.1-opus` (API id `claude-opus-4-1`) (API-only). |
-| `--base-url <url>` | Point the API engine at any OpenAI-compatible endpoint (LiteLLM, Azure, etc.). |
-| `--chatgpt-url <url>` | Point the browser engine at the ChatGPT root or a workspace/folder URL. |
-| `--azure-endpoint <url>` | Use Azure OpenAI (switches client automatically). |
-| `--files-report` | Print per-file token usage. |
-| `--dry-run [summary\|json\|full]` | Inspect the request without sending (alias: `--preview`). |
+| `-f, --file <paths...>` | Attach files/dirs (globs + `!` excludes; multiple flags merge). |
+| `-e, --engine <api|browser>` | API by default when `OPENAI_API_KEY` is set; otherwise browser. |
+| `-m, --model <name>` | `gpt-5.1-pro` (default), `gpt-5.1`, `gpt-5.1-codex` (API-only), others per config. |
+| `--render` / `--render-markdown` | Pretty-print the bundle to stdout. |
+| `--render-plain` | Force plain markdown (no ANSI) even in TTY. Wins if combined with `--render`. |
+| `--copy` / `--copy-markdown` | Copy the bundle to the clipboard; can combine with render flags. |
+| `--files-report` | Show per-file token usage. |
+| `--dry-run [summary|json|full]` | Preview without calling the model. |
+| `--chatgpt-url <url>` | Target a specific ChatGPT workspace/folder in browser mode. |
+| `--base-url <url>` | Point API runs at any OpenAI-compatible endpoint (LiteLLM/Azure/etc.). |
 
-See [docs/openai-endpoints.md](docs/openai-endpoints.md) for advanced Azure/LiteLLM configuration.
+Full flag list: `npx -y @steipete/oracle --help` (or `--help --verbose` for hidden flags).
 
-## Sessions & background runs
+## Configuration
+- User defaults live in `~/.oracle/config.json` (JSON5). Set engine/model, notify prefs, browser defaults, prompt suffixes, timeouts, etc. Precedence: CLI flag > env var > config file. See [docs/configuration.md](docs/configuration.md).
+- Browser cookies: `--browser-inline-cookies[(-file)]` to avoid Keychain/Chrome reads; fallback files: `~/.oracle/cookies.{json,base64}`.
 
-Every non-preview run writes to `~/.oracle/sessions/<slug>` with usage, cost hints, and logs. Use `oracle status` to list sessions, `oracle session <id>` to replay, and `oracle status --clear --hours 168` to prune. Set `ORACLE_HOME_DIR` to relocate storage.
-Add `--render` (alias `--render-markdown`) when attaching to pretty-print the stored markdown if your terminal supports color; falls back to raw text otherwise. Use `--render-plain` to force plain markdown (no ANSI) even in a rich TTY, or combine it with `--render`/`--render-markdown` if you still want the rendering path but prefer unstyled output.
-
-### Manual handoff (no browser automation)
-- Copy + preview in one step: `pnpm oracle --copy --render -p "Your prompt" --file "src/**/*.ts" --file "!src/**/*.test.ts"`
-  - Copies the bundle to your clipboard and shows a colorized preview; use `--render-plain` if you want unstyled text while copying.
-- Save bundle to disk for later pasting: `pnpm oracle --render-plain -p "Your prompt" --file path/to/files > bundle.md`
-  - Produces a clean markdown file containing the SYSTEM/USER blocks and `### File:` fenced sections; ready to paste into ChatGPT.
-
-**Recommendation:** Prefer the API engine when you have an API key (`--engine api` or just set `OPENAI_API_KEY`). The API delivers more reliable results and supports longer, uninterrupted runs than the browser engine in most cases.
-
-**Wait vs no-wait:** gpt-5.1-pro API runs default to detaching (shows a reattach hint); add `--wait` to stay attached. gpt-5.1, gpt-5.1-codex, and browser runs block by default. You can reattach anytime via `oracle session <id>`.
-
-**Duplicate prompt guard:** If a session with the exact same prompt is already running, new runs are blocked with a reminder to reattach. Use `--force` only when you truly want a second run of the same prompt (e.g., to compare settings).
+## FAQ / troubleshooting
+- **Browser keeps prompting for login/Keychain?** Use API mode or `--browser-inline-cookies[(-file)]` / `--browser-no-cookie-sync`.
+- **Oversize bundle warning (~196k tokens)?** Trim files or use `--files-report` to see heavy hitters.
+- **Progress spam?** Use non-verbose mode; browser automation logs stay quiet unless `--verbose`.
+- **Need Chromium/Edge?** Set `--browser-chrome-path` and `--browser-cookie-path`; see [docs/chromium-forks.md](docs/chromium-forks.md).
+- **Detach vs wait?** Pro API runs detach by default; add `--wait` to stay attached, else reattach via `oracle session <id>`.
 
 ## Testing
 
 ```bash
 pnpm test
-pnpm test:coverage
+pnpm run lint
 ```
 
----
+## Docs & credits
+- Docs: `docs/browser-mode.md`, `docs/chromium-forks.md`, `docs/configuration.md`, `docs/manual-tests.md`, `docs/mcp.md`, `docs/testing/mcp-smoke.md`, `docs/tui-debug.md`.
+- Sessions and tooling share `~/.oracle/sessions` across CLI and MCP.
+- MIT licensed. Maintained by @steipete. Inspired by https://ampcode.com/news/oracle.
 
 If you’re looking for an even more powerful context-management tool, check out https://repoprompt.com
-
-Name inspired by: https://ampcode.com/news/oracle
