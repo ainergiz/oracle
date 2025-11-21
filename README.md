@@ -37,7 +37,7 @@ npx -y @steipete/oracle
 
 ## Integration
 
-- API mode expects API keys in your environment (set once in your shell profile): `OPENAI_API_KEY` (GPT-5.x), `GEMINI_API_KEY` (Gemini 3 Pro), `ANTHROPIC_API_KEY` (Claude Sonnet 4.5 / Opus 4.1).
+- API mode expects API keys in your environment: `OPENAI_API_KEY` (GPT-5.x), `GEMINI_API_KEY` (Gemini 3 Pro), `ANTHROPIC_API_KEY` (Claude Sonnet 4.5 / Opus 4.1).
 - Prefer API mode or `--copy` + manual paste; browser automation is experimental.
 - MCP server: `pnpm mcp` (or `oracle-mcp`) after building; see [docs/mcp.md](docs/mcp.md).
 - Remote browser service: `oracle serve` on a signed-in host; clients use `--remote-host/--remote-token`.
