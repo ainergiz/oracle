@@ -192,8 +192,8 @@ async function resolveCookieFilePath({
 async function adaptPathForChromeCookies(resolved: string): Promise<string> {
   const stat = await fs.stat(resolved).catch(() => null);
   if (stat?.isFile()) {
-    // chrome-cookies-secure appends "Cookies" if given a directory; give it the parent dir when we already have the file.
-    return path.dirname(resolved);
+    // chrome-cookies-secure appends "Cookies" if given a directory; give it the file itself.
+    return resolved;
   }
   return resolved;
 }
