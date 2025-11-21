@@ -202,11 +202,13 @@ export async function runOracle(options: RunOracleOptions, deps: RunOracleDeps =
     if (baseUrl) {
       log(dim(`Base URL: ${formatBaseUrlForLog(baseUrl)}`));
     }
-    if (pendingNoFilesTip) {
-      log(dim(pendingNoFilesTip));
-    }
-    if (pendingShortPromptTip) {
-      log(dim(pendingShortPromptTip));
+    if (!options.suppressTips) {
+      if (pendingNoFilesTip) {
+        log(dim(pendingNoFilesTip));
+      }
+      if (pendingShortPromptTip) {
+        log(dim(pendingShortPromptTip));
+      }
     }
     if (isLongRunningModel) {
       log(dim('This model can take up to 60 minutes (usually replies much faster).'));

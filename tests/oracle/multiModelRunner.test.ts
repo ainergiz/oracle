@@ -106,6 +106,14 @@ describe('runMultiModelApiSession', () => {
       expect.objectContaining({ model: 'gpt-5.1-pro', reason: expect.any(OracleResponseError) }),
     ]);
 
+    runOracleImpl.mock.calls.forEach(([options]) => {
+      expect(options).toMatchObject({
+        suppressHeader: true,
+        suppressAnswerHeader: true,
+        suppressTips: true,
+      });
+    });
+
     const statusUpdatesFor = (model: string) =>
       updateModelRun.mock.calls
         .filter(([, m]) => m === model)

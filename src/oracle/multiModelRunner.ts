@@ -142,8 +142,10 @@ function startModelExecution({
       {
         ...perModelOptions,
         effectiveModelId: model,
-        // Keep the "Calling <model>" header in the log but drop the extra "Answer:" label when replaying multi-model runs.
+        // Drop per-model preamble; the aggregate runner prints the shared header and tips once.
+        suppressHeader: true,
         suppressAnswerHeader: true,
+        suppressTips: true,
       },
       {
         cwd,

@@ -262,6 +262,8 @@ describe('performSessionRun', () => {
     const logsCombined = logSpy.mock.calls.map((c) => c[0]).join('\n');
     expect(logsCombined).toContain('Calling gpt-5.1, gemini-3-pro');
     expect((logsCombined.match(/Calling gpt-5.1/g) ?? []).length).toBe(1);
+    expect((logsCombined.match(/Tip: no files attached/g) ?? []).length).toBe(1);
+    expect((logsCombined.match(/Tip: brief prompts often yield generic answers/g) ?? []).length).toBe(1);
     expect(logsCombined).toMatch(/Finished in .*2\/2 models/);
 
     writeSpy.mockRestore();

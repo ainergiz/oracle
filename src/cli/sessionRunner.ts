@@ -145,6 +145,18 @@ export async function performSessionRun({
       const modelsLabel = multiModels.join(', ');
       log(`Calling ${isTty ? kleur.cyan(modelsLabel) : modelsLabel} — ${tokenLabel} tokens, ${filesPhrase}.`);
 
+      const multiRunTips: string[] = [];
+      if (files.length === 0) {
+        multiRunTips.push('Tip: no files attached — Oracle works best with project context. Add files via --file path/to/code or docs.');
+      }
+      const shortPrompt = (runOptions.prompt?.trim().length ?? 0) < 80;
+      if (shortPrompt) {
+        multiRunTips.push('Tip: brief prompts often yield generic answers — aim for 6–30 sentences and attach key files.');
+      }
+      for (const tip of multiRunTips) {
+        log(dim(tip));
+      }
+
       const shouldStreamInline = process.stdout.isTTY;
       const shouldRenderMarkdown = shouldStreamInline && runOptions.renderPlain !== true;
       const printedModels = new Set<string>();

@@ -128,6 +128,8 @@ export interface RunOracleOptions {
   suppressHeader?: boolean;
   /** Hide the default “Answer:” label, but keep the leading newline for readability. */
   suppressAnswerHeader?: boolean;
+  /** Skip preamble tips (no-files / short prompt) when a higher-level runner already printed them. */
+  suppressTips?: boolean;
 }
 
 export interface UsageSummary {
