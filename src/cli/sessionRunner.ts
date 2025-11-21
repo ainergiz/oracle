@@ -27,6 +27,7 @@ import { buildPrompt, buildRequestBody } from '../oracle/request.js';
 import { estimateRequestTokens } from '../oracle/tokenEstimate.js';
 import { formatTokenEstimate, formatTokenValue } from '../oracle/runUtils.js';
 import { formatElapsed } from '../oracle/format.js';
+import { sanitizeOscProgress } from './oscUtils.js';
 import { readFiles } from '../oracle/files.js';
 import { formatUSD } from '../oracle/format.js';
 import { SESSIONS_DIR } from '../sessionManager.js';
@@ -179,23 +180,7 @@ export async function performSessionRun({
       const shouldRenderMarkdown = shouldStreamInline && runOptions.renderPlain !== true;
       const printedModels = new Set<string>();
       const answerFallbacks = new Map<string, string>();
-      const stripOscProgress = (text: string): string => {
-        if (shouldStreamInline) {
-          // On a real TTY we want the OSC progress hints to show up.
-          return text;
-        }
-        const oscStart = '\u001b]9;4;';
-        const oscEnd = '\u001b\\';
-        let current = text;
-        // Remove any OSC 9;4 progress sequences that may linger in stored logs.
-        while (current.includes(oscStart)) {
-          const start = current.indexOf(oscStart);
-          const end = current.indexOf(oscEnd, start + oscStart.length);
-          const cutEnd = end === -1 ? start + oscStart.length : end + oscEnd.length;
-          current = `${current.slice(0, start)}${current.slice(cutEnd)}`;
-        }
-        return current;
-      };
+      const stripOscProgress = (text: string): string => sanitizeOscProgress(text, shouldStreamInline);
 
       const printModelLog = async (model: string) => {
         if (printedModels.has(model)) return;
