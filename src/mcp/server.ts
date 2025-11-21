@@ -29,11 +29,15 @@ export async function startMcpServer(): Promise<void> {
   transport.onerror = (error) => {
     console.error('MCP transport error:', error);
   };
-  transport.onclose = () => {
-    // Keep quiet on normal close; caller owns lifecycle.
-  };
+  const closed = new Promise<void>((resolve) => {
+    transport.onclose = () => {
+      resolve();
+    };
+  });
 
+  // Keep the process alive until the client closes the transport.
   await server.connect(transport);
+  await closed;
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('oracle-mcp')) {
