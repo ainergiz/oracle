@@ -54,7 +54,7 @@ Engine auto-picks API when `OPENAI_API_KEY` is set, otherwise browser; browser i
 
 **MCP**
 - Run the stdio server via `oracle-mcp`.
-- Configure clients via [steipete/mcporter](https://github.com/steipete/mcporter) or `.mcp.json`; see [docs/mcp.md](docs/mcp.md) for connection examples and scope options.
+- Configure clients via [steipete/mcporter](https://github.com/steipete/mcporter) or `.mcp.json`; see [docs/mcp.md](docs/mcp.md) for connection examples.
 ```bash
 npx -y @steipete/oracle oracle-mcp
 ```
