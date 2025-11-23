@@ -40,7 +40,22 @@ const CLI_ENTRY = path.join(process.cwd(), 'bin', 'oracle-cli.ts');
         version: 'live-smoke',
       });
       if (summary.rejected.length > 0) {
-        return; // treat unavailable models as skipped to keep suite green
+        const accessRejections = summary.rejected.filter((rej) =>
+          /model_not_found|does not exist|no allowed providers|access|permission/i.test(String(rej.reason ?? '')),
+        );
+        const nonAccess = summary.rejected.filter(
+          (rej) => !/model_not_found|does not exist|no allowed providers|access|permission/i.test(String(rej.reason ?? '')),
+        );
+        if (nonAccess.length > 0) {
+          throw new Error(
+            `Unexpected rejections: ${nonAccess
+              .map((r) => `${r.model}: ${String(r.reason ?? '')}`)
+              .join('; ')}`,
+          );
+        }
+        if (accessRejections.length === summary.rejected.length) {
+          return; // all were access/permission issues, treat as skip
+        }
       }
       expect(summary.rejected.length).toBe(0);
       expect(summary.fulfilled.map((r) => r.model)).toEqual(expect.arrayContaining(models));
@@ -78,8 +93,14 @@ const CLI_ENTRY = path.join(process.cwd(), 'bin', 'oracle-cli.ts');
           { env },
         );
       } catch (_error) {
-        // Any failure here is likely due to unavailable models; treat as skip to keep suite green.
-        return;
+        const message =
+          _error instanceof Error && 'stderr' in _error
+            ? String(((_error as unknown as { stderr?: unknown }).stderr ?? _error.message))
+            : String(_error);
+        if (/model_not_found|does not exist|no allowed providers|access|permission/i.test(message)) {
+          return; // unavailable models — treat as soft skip
+        }
+        throw _error;
       }
 
       const sessionsDir = path.join(oracleHome, 'sessions');
