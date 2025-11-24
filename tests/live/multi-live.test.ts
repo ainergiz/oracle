@@ -116,6 +116,24 @@ const CLI_ENTRY = path.join(process.cwd(), 'bin', 'oracle-cli.ts');
       );
       expect(metadata.status).toBe('completed');
 
+      // Regression: session render should include the answer even when model logs are empty (browser-style storage).
+      try {
+        const { stdout } = await execFileAsync(
+          process.execPath,
+          [TSX_BIN, CLI_ENTRY, 'session', sessionIds[0], '--render', '--hide-prompt'],
+          { env },
+        );
+        expect(stdout.toLowerCase()).toContain('answer');
+      } catch (error) {
+        const message = error instanceof Error && 'stderr' in error
+          ? String((error as { stderr?: unknown }).stderr ?? error.message)
+          : String(error);
+        if (/model_not_found|permission/i.test(message)) {
+          return; // treat unavailable models as skip
+        }
+        throw error;
+      }
+
       await rm(oracleHome, { recursive: true, force: true });
     },
     600_000,

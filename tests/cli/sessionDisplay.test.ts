@@ -44,6 +44,7 @@ const markdownMock = await import('../../src/cli/markdownRenderer.ts');
 const renderMarkdownMock = markdownMock.renderMarkdownAnsi as unknown as { mockClear?: () => void };
 const readSessionMetadataMock = sessionStoreMock.readSession as unknown as ReturnType<typeof vi.fn>;
 const readSessionLogMock = sessionStoreMock.readLog as unknown as ReturnType<typeof vi.fn>;
+const readModelLogMock = sessionStoreMock.readModelLog as unknown as ReturnType<typeof vi.fn>;
 const readSessionRequestMock = sessionStoreMock.readRequest as unknown as ReturnType<typeof vi.fn>;
 
 const originalIsTty = process.stdout.isTTY;
@@ -181,6 +182,46 @@ describe('attachSession rendering', () => {
     expect(logSpy).toHaveBeenCalledWith('Models:');
     expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/gpt-5\.1-pro.*completed tok=12\/24/));
     expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/gemini-3-pro.*running tok=0\/10/));
+  });
+
+  test('ignores empty model filter from CLI defaults', async () => {
+    const multiMeta: SessionMetadata = {
+      ...baseMeta,
+      models: [
+        { model: 'gpt-5.1-pro', status: 'completed', usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0, totalTokens: 3 } },
+      ],
+    } as SessionMetadata;
+    readSessionMetadataMock.mockResolvedValue(multiMeta);
+    readSessionLogMock.mockResolvedValue('Answer:\nbody');
+    readSessionRequestMock.mockResolvedValue({ prompt: 'Prompt here' });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writeSpy = vi.spyOn(process.stdout, 'write');
+
+    await attachSession('sess', { renderMarkdown: false, model: '' });
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('gpt-5.1-pro'));
+    expect(writeSpy).toHaveBeenCalledWith(expect.stringContaining('Answer:'));
+  });
+
+  test('falls back to session log when per-model logs are empty', async () => {
+    const multiMeta: SessionMetadata = {
+      ...baseMeta,
+      models: [
+        { model: 'gpt-5.1-pro', status: 'completed', usage: { inputTokens: 1, outputTokens: 2, reasoningTokens: 0, totalTokens: 3 } },
+      ],
+    } as SessionMetadata;
+    readSessionMetadataMock.mockResolvedValue(multiMeta);
+    readSessionLogMock.mockResolvedValue('Answer:\nfrom-session-log');
+    // model log missing/empty
+    readModelLogMock.mockResolvedValue('');
+    readSessionRequestMock.mockResolvedValue({ prompt: 'Prompt here' });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const writeSpy = vi.spyOn(process.stdout, 'write');
+
+    await attachSession('sess', { renderMarkdown: false });
+
+    expect(writeSpy).toHaveBeenCalledWith(expect.stringContaining('Answer:\nfrom-session-log'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('gpt-5.1-pro'));
   });
 
   test('renders markdown when requested and rich tty', async () => {
