@@ -12,6 +12,7 @@ import { renderMarkdownAnsi } from './markdownRenderer.js';
 import { formatElapsed, formatUSD } from '../oracle/format.js';
 import { MODEL_CONFIGS } from '../oracle.js';
 import { sessionStore, wait } from '../sessionStore.js';
+import { formatTokenCount, formatTokenValue } from '../oracle/runUtils.js';
 
 const isTty = (): boolean => Boolean(process.stdout.isTTY);
 const dim = (text: string): string => (isTty() ? kleur.dim(text) : text);
@@ -135,7 +136,7 @@ export async function attachSession(sessionId: string, options?: AttachSessionOp
       console.log('Models:');
       for (const run of metadata.models) {
         const usage = run.usage
-          ? ` tok=${run.usage.outputTokens?.toLocaleString() ?? 0}/${run.usage.totalTokens?.toLocaleString() ?? 0}`
+          ? ` tok=${formatTokenCount(run.usage.outputTokens ?? 0)}/${formatTokenCount(run.usage.totalTokens ?? 0)}`
           : '';
         console.log(`- ${chalk.cyan(run.model)} — ${run.status}${usage}`);
       }
@@ -501,16 +502,24 @@ async function buildSessionLogForDisplay(
     return await sessionStore.readLog(sessionId);
   }
   const candidates =
-    normalizedFilter != null
+    normalizedFilter
       ? models.filter((model) => model.model.toLowerCase() === normalizedFilter)
       : models;
   if (candidates.length === 0) {
     return '';
   }
   const sections: string[] = [];
+  let hasContent = false;
   for (const model of candidates) {
-    const body = await sessionStore.readModelLog(sessionId, model.model);
+    const body = (await sessionStore.readModelLog(sessionId, model.model)) ?? '';
+    if (body.trim().length > 0) {
+      hasContent = true;
+    }
     sections.push(`=== ${model.model} ===\n${body}`.trimEnd());
+  }
+  if (!hasContent) {
+    // Fallback for runs that recorded output only in the session log (e.g., browser runs without per-model logs).
+    return await sessionStore.readLog(sessionId);
   }
   return sections.join('\n\n');
 }
@@ -583,7 +592,21 @@ export function formatCompletionSummary(
   const usage = metadata.usage;
   const cost = metadata.mode === 'browser' ? null : resolveCost(metadata);
   const costPart = cost != null ? ` | ${formatUSD(cost)}` : '';
-  const tokensDisplay = `${usage.inputTokens}/${usage.outputTokens}/${usage.reasoningTokens}/${usage.totalTokens}`;
+  const tokensDisplay = [
+    usage.inputTokens ?? 0,
+    usage.outputTokens ?? 0,
+    usage.reasoningTokens ?? 0,
+    usage.totalTokens ?? 0,
+  ]
+    .map((value, index) =>
+      formatTokenValue(value, {
+        input_tokens: usage.inputTokens,
+        output_tokens: usage.outputTokens,
+        reasoning_tokens: usage.reasoningTokens,
+        total_tokens: usage.totalTokens,
+      }, index),
+    )
+    .join('/');
   const filesCount = metadata.options?.file?.length ?? 0;
   const filesPart = filesCount > 0 ? ` | files=${filesCount}` : '';
   const slugPart = options.includeSlug ? ` | slug=${metadata.id}` : '';
