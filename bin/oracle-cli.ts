@@ -1232,7 +1232,8 @@ function applyBrowserDefaultsFromConfig(options: CliOptions, config: UserConfig)
   const source = (key: keyof CliOptions) => program.getOptionValueSource?.(key as string);
 
   const configuredChatgptUrl = browser.chatgptUrl ?? browser.url;
-  if (source('chatgptUrl') === 'default' && configuredChatgptUrl !== undefined) {
+  const cliChatgptSet = options.chatgptUrl !== undefined || options.browserUrl !== undefined;
+  if ((source('chatgptUrl') === 'default' || source('chatgptUrl') === undefined) && !cliChatgptSet && configuredChatgptUrl !== undefined) {
     try {
       options.chatgptUrl = normalizeChatgptUrl(configuredChatgptUrl ?? '', CHATGPT_URL);
     } catch (error) {
@@ -1248,7 +1249,7 @@ function applyBrowserDefaultsFromConfig(options: CliOptions, config: UserConfig)
   if (source('browserCookiePath') === 'default' && browser.chromeCookiePath !== undefined) {
     options.browserCookiePath = browser.chromeCookiePath ?? undefined;
   }
-  if (source('browserUrl') === 'default' && browser.url !== undefined) {
+  if ((source('browserUrl') === 'default' || source('browserUrl') === undefined) && options.browserUrl === undefined && browser.url !== undefined) {
     options.browserUrl = browser.url;
   }
   if (source('browserTimeout') === 'default' && typeof browser.timeoutMs === 'number') {
