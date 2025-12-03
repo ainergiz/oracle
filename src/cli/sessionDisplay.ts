@@ -4,23 +4,20 @@ import type {
   SessionMetadata,
   SessionTransportMetadata,
   SessionUserErrorMetadata,
-  SessionStatus,
-  SessionModelRun,
 } from '../sessionStore.js';
 import type { OracleResponseMetadata } from '../oracle.js';
 import { renderMarkdownAnsi } from './markdownRenderer.js';
 import { formatElapsed, formatUSD } from '../oracle/format.js';
-import { MODEL_CONFIGS } from '../oracle.js';
 import { sessionStore, wait } from '../sessionStore.js';
 import { formatTokenCount, formatTokenValue } from '../oracle/runUtils.js';
 import type { BrowserLogger } from '../browser/types.js';
 import { resumeBrowserSession } from '../browser/reattach.js';
 import { estimateTokenCount } from '../browser/utils.js';
+import { formatSessionTableHeader, formatSessionTableRow, resolveSessionCost } from './sessionTable.js';
 
 const isTty = (): boolean => Boolean(process.stdout.isTTY);
 const dim = (text: string): string => (isTty() ? kleur.dim(text) : text);
 export const MAX_RENDER_BYTES = 200_000;
-const MODEL_COLUMN_WIDTH = 18;
 
 function isProcessAlive(pid?: number): boolean {
   if (!pid) return false;
@@ -62,17 +59,9 @@ export async function showStatus({
     return;
   }
   console.log(chalk.bold('Recent Sessions'));
-  console.log(chalk.dim('Timestamp             Chars  Cost  Status     Models              ID'));
+  console.log(formatSessionTableHeader(richTty));
   for (const entry of filteredEntries) {
-    const statusRaw = (entry.status || 'unknown').padEnd(9);
-    const status = richTty ? colorStatus(entry.status ?? 'unknown', statusRaw) : statusRaw;
-    const modelColumn = formatModelColumn(entry, MODEL_COLUMN_WIDTH, richTty);
-    const created = formatTimestamp(entry.createdAt);
-    const chars = entry.options?.prompt?.length ?? entry.promptPreview?.length ?? 0;
-    const charLabel = chars > 0 ? String(chars).padStart(5) : '    -';
-    const costValue = resolveCost(entry);
-    const costLabel = costValue != null ? formatCostTable(costValue) : '     -';
-    console.log(`${created} | ${charLabel} | ${costLabel} | ${status} | ${modelColumn} | ${entry.id}`);
+    console.log(formatSessionTableRow(entry, { rich: richTty }));
   }
   if (truncated) {
     const sessionsDir = sessionStore.sessionsDir();
@@ -84,19 +73,6 @@ export async function showStatus({
   }
   if (showExamples) {
     printStatusExamples();
-  }
-}
-
-function colorStatus(status: string, padded: string): string {
-  switch (status) {
-    case 'completed':
-      return chalk.green(padded);
-    case 'error':
-      return chalk.red(padded);
-    case 'running':
-      return chalk.yellow(padded);
-    default:
-      return padded;
   }
 }
 
@@ -527,47 +503,6 @@ function matchesModel(entry: SessionMetadata, filter: string): boolean {
   return models.includes(normalized);
 }
 
-function formatModelColumn(entry: SessionMetadata, width: number, richTty: boolean): string {
-  const models =
-    entry.models && entry.models.length > 0
-      ? entry.models
-      : entry.model
-        ? [{ model: entry.model, status: entry.status as SessionStatus }]
-        : [];
-  if (models.length === 0) {
-    return 'n/a'.padEnd(width);
-  }
-  const badges = models.map((model) => formatModelBadge(model, richTty));
-  const text = badges.join(' ');
-  if (text.length > width) {
-    return `${text.slice(0, width - 1)}…`;
-  }
-  return text.padEnd(width);
-}
-
-function formatModelBadge(model: SessionModelRun, richTty: boolean): string {
-  const glyph = statusGlyph(model.status);
-  const text = `${model.model}${glyph}`;
-  return richTty ? chalk.cyan(text) : text;
-}
-
-function statusGlyph(status: SessionStatus | undefined): string {
-  switch (status) {
-    case 'completed':
-      return '✓';
-    case 'running':
-      return '⌛';
-    case 'pending':
-      return '…';
-    case 'error':
-      return '✖';
-    case 'cancelled':
-      return '⦻';
-    default:
-      return '?';
-  }
-}
-
 async function buildSessionLogForDisplay(
   sessionId: string,
   fallbackMeta: SessionMetadata,
@@ -646,22 +581,6 @@ function extractRenderableChunks(text: string, state: LiveRenderState): { chunks
   return { chunks, remainder: buffer };
 }
 
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso);
-  const locale = 'en-US';
-  const opts: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: undefined,
-    hour12: true,
-  };
-  const formatted = date.toLocaleString(locale, opts);
-  return formatted.replace(/(, )(\d:)/, '$1 $2');
-}
-
 export function formatCompletionSummary(
   metadata: SessionMetadata,
   options: { includeSlug?: boolean } = {},
@@ -671,7 +590,7 @@ export function formatCompletionSummary(
   }
   const modeLabel = metadata.mode === 'browser' ? `${metadata.model ?? 'n/a'}[browser]` : metadata.model ?? 'n/a';
   const usage = metadata.usage;
-  const cost = metadata.mode === 'browser' ? null : resolveCost(metadata);
+  const cost = resolveSessionCost(metadata);
   const costPart = cost != null ? ` | ${formatUSD(cost)}` : '';
   const tokensDisplay = [
     usage.inputTokens ?? 0,
@@ -692,30 +611,6 @@ export function formatCompletionSummary(
   const filesPart = filesCount > 0 ? ` | files=${filesCount}` : '';
   const slugPart = options.includeSlug ? ` | slug=${metadata.id}` : '';
   return `Finished in ${formatElapsed(metadata.elapsedMs)} (${modeLabel}${costPart} | tok(i/o/r/t)=${tokensDisplay}${filesPart}${slugPart})`;
-}
-
-function resolveCost(metadata: SessionMetadata): number | null {
-  if (metadata.mode === 'browser') {
-    return null;
-  }
-  if (metadata.usage?.cost != null) {
-    return metadata.usage.cost;
-  }
-  if (!metadata.model || !metadata.usage) {
-    return null;
-  }
-  const pricing = MODEL_CONFIGS[metadata.model as keyof typeof MODEL_CONFIGS]?.pricing;
-  if (!pricing) {
-    return null;
-  }
-  const input = metadata.usage.inputTokens ?? 0;
-  const output = metadata.usage.outputTokens ?? 0;
-  const cost = input * pricing.inputPerToken + output * pricing.outputPerToken;
-  return cost > 0 ? cost : null;
-}
-
-function formatCostTable(cost: number): string {
-  return `$${cost.toFixed(3)}`.padStart(7);
 }
 
 async function readStoredPrompt(sessionId: string): Promise<string | null> {

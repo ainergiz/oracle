@@ -10,6 +10,7 @@ import type { SessionMetadata, SessionMode, BrowserSessionConfig, SessionModelRu
 import { sessionStore, pruneOldSessions } from '../../sessionStore.js';
 import { performSessionRun } from '../sessionRunner.js';
 import { MAX_RENDER_BYTES, trimBeforeFirstAnswer } from '../sessionDisplay.js';
+import { formatSessionTableHeader, formatSessionTableRow } from '../sessionTable.js';
 import { buildBrowserConfig, resolveBrowserModelLabel } from '../browserConfig.js';
 import { resolveNotificationSettings } from '../notifier.js';
 import { loadUserConfig, type UserConfig } from '../../config.js';
@@ -20,12 +21,6 @@ const dim = (text: string): string => (isTty() ? kleur.dim(text) : text);
 
 const RECENT_WINDOW_HOURS = 24;
 const PAGE_SIZE = 10;
-const STATUS_PAD = 9;
-const MODEL_PAD = 13;
-const MODE_PAD = 7;
-const TIMESTAMP_PAD = 19;
-const CHARS_PAD = 5;
-const COST_PAD = 7;
 
 type SessionChoice = { name: string; value: string };
 type Choice =
@@ -54,11 +49,7 @@ export async function launchTui({ version, printIntro = true }: LaunchTuiOptions
     const { recent, older, olderTotal } = await fetchSessionBuckets();
     const choices: Choice[] = [];
 
-    const headerLabel = dim(
-      `${'Status'.padEnd(STATUS_PAD)} ${'Model'.padEnd(MODEL_PAD)} ${'Mode'.padEnd(MODE_PAD)} ${'Timestamp'.padEnd(
-        TIMESTAMP_PAD,
-      )} ${'Chars'.padStart(CHARS_PAD)} ${'Cost'.padStart(COST_PAD)}  Slug`,
-    );
+    const headerLabel = formatSessionTableHeader(isTty());
 
     // Start with a selectable row so focus never lands on a separator
     choices.push({ name: chalk.bold.green('ask oracle'), value: '__ask__' });
@@ -155,79 +146,9 @@ async function fetchSessionBuckets(): Promise<{
 
 function toSessionChoice(meta: SessionMetadata): SessionChoice {
   return {
-    name: formatSessionLabel(meta),
+    name: formatSessionTableRow(meta, { rich: isTty() }),
     value: meta.id,
   };
-}
-
-function formatSessionLabel(meta: SessionMetadata): string {
-  const status = colorStatus(meta.status ?? 'unknown');
-  const created = formatTimestampAligned(meta.createdAt);
-  const model = meta.model ?? 'n/a';
-  const mode = meta.mode ?? meta.options?.mode ?? 'api';
-  const slug = meta.id;
-  const chars = meta.options?.prompt?.length ?? meta.promptPreview?.length ?? 0;
-  const charLabel = chars > 0 ? chalk.gray(String(chars).padStart(CHARS_PAD)) : chalk.gray(`${''.padStart(CHARS_PAD - 1)}-`);
-  const cost = mode === 'browser' ? null : resolveCost(meta);
-  const costLabel = cost != null ? chalk.gray(formatCostTable(cost)) : chalk.gray(`${''.padStart(COST_PAD - 1)}-`);
-  return `${status} ${chalk.white(model.padEnd(MODEL_PAD))} ${chalk.gray(mode.padEnd(MODE_PAD))} ${chalk.gray(created.padEnd(
-    TIMESTAMP_PAD,
-  ))} ${charLabel} ${costLabel}  ${chalk.cyan(
-    slug,
-  )}`;
-}
-
-function resolveCost(meta: SessionMetadata): number | null {
-  if (meta.usage?.cost != null) {
-    return meta.usage.cost;
-  }
-  if (!meta.model || !meta.usage) {
-    return null;
-  }
-  const pricing = MODEL_CONFIGS[meta.model as keyof typeof MODEL_CONFIGS]?.pricing;
-  if (!pricing) return null;
-  const input = meta.usage.inputTokens ?? 0;
-  const output = meta.usage.outputTokens ?? 0;
-  const cost = input * pricing.inputPerToken + output * pricing.outputPerToken;
-  return cost > 0 ? cost : null;
-}
-
-function formatCostTable(cost: number): string {
-  return `$${cost.toFixed(3)}`.padStart(COST_PAD);
-}
-
-function formatTimestampAligned(iso: string): string {
-  const date = new Date(iso);
-  const locale = 'en-US';
-  const opts: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: undefined,
-    hour12: true,
-  };
-  let formatted = date.toLocaleString(locale, opts);
-  // Drop the comma and use double-space between date and time for alignment.
-  formatted = formatted.replace(', ', '  ');
-  // Insert a leading space when hour is a single digit to align AM/PM column.
-  // Example: "11/18/2025  1:07 AM" -> "11/18/2025   1:07 AM"
-  return formatted.replace(/(\s)(\d:)/, '$1 $2');
-}
-
-function colorStatus(status: string): string {
-  const padded = status.padEnd(9);
-  switch (status) {
-    case 'completed':
-      return chalk.green(padded);
-    case 'error':
-      return chalk.red(padded);
-    case 'running':
-      return chalk.yellow(padded);
-    default:
-      return padded;
-  }
 }
 
 async function showSessionDetail(sessionId: string): Promise<void> {
@@ -610,4 +531,4 @@ async function readStoredPrompt(sessionId: string): Promise<string | null> {
 
 // Exported for testing
 export { askOracleFlow, showSessionDetail };
-export { resolveCost };
+export { resolveSessionCost as resolveCost } from '../sessionTable.js';

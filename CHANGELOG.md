@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.1 — Unreleased
+
+### Changed
+- `oracle status` now uses the same session table formatting as the TUI (status/model/mode/timestamp/chars/cost/slug), keeping colors/alignment consistent across both views.
+
 ## 0.5.0 — 2025-11-25
 
 ### Added

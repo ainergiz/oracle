@@ -4,7 +4,7 @@ vi.mock('../../src/cli/tui/index.js', () => ({
   launchTui: vi.fn().mockResolvedValue(undefined),
 }));
 
-const launchTuiMock = vi.mocked(await import('../../src/cli/tui/index.js')).launchTui;
+const launchTuiMock = vi.mocked(await import('../../src/cli/tui/index.js')).launchTui as ReturnType<typeof vi.fn>;
 
 describe('zero-arg TUI entry', () => {
   test('invokes launchTui when no args and TTY', async () => {
