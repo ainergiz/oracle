@@ -106,6 +106,8 @@ export async function submitPrompt(
         const editor = document.querySelector(${primarySelectorLiteral});
         if (editor) {
           editor.textContent = ${encodedPrompt};
+          // Nudge ProseMirror to register the textContent write so its state/send-button updates
+          editor.dispatchEvent(new InputEvent('input', { bubbles: true, data: ${encodedPrompt}, inputType: 'insertFromPaste' }));
         }
       })()`,
     });
@@ -152,7 +154,12 @@ async function attemptSendButton(Runtime: ChromeClient['Runtime']): Promise<bool
       style.pointerEvents === 'none' ||
       style.display === 'none';
     if (disabled) return 'disabled';
-    (button as HTMLElement).click();
+    // Use full mouse event sequence for React compatibility
+    (button).dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    (button).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    (button).dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true }));
+    (button).dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    (button).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     return 'clicked';
   })()`;
 
