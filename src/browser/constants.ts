@@ -32,6 +32,9 @@ export const FILE_INPUT_SELECTORS = [
   'input[type="file"][multiple]:not([accept])',
   'input[type="file"][multiple]',
   'input[type="file"]:not([accept])',
+  'form input[type="file"][accept]',
+  'input[type="file"][accept]',
+  'input[type="file"]',
   'input[type="file"][data-testid*="file"]',
 ];
 // Legacy single selectors kept for compatibility with older call-sites

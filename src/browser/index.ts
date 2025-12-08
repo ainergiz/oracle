@@ -313,6 +313,7 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
       await raceWithDisconnect(ensurePromptReady(Runtime, config.inputTimeoutMs, logger));
       logger(`Prompt textarea ready (after model switch, ${promptText.length.toLocaleString()} chars queued)`);
     }
+    const attachmentNames = attachments.map((a) => path.basename(a.path));
     if (attachments.length > 0) {
       if (!DOM) {
         throw new Error('Chrome DOM domain unavailable while uploading attachments.');
@@ -322,10 +323,9 @@ export async function runBrowserMode(options: BrowserRunOptions): Promise<Browse
         await uploadAttachmentFile({ runtime: Runtime, dom: DOM }, attachment, logger);
       }
       const waitBudget = Math.max(config.inputTimeoutMs ?? 30_000, 30_000);
-      await raceWithDisconnect(waitForAttachmentCompletion(Runtime, waitBudget, logger));
+      await raceWithDisconnect(waitForAttachmentCompletion(Runtime, waitBudget, attachmentNames, logger));
       logger('All attachments uploaded');
     }
-    const attachmentNames = attachments.map((a) => path.basename(a.path));
     await raceWithDisconnect(submitPrompt({ runtime: Runtime, input: Input, attachmentNames }, promptText, logger));
     stopThinkingMonitor = startThinkingStatusMonitor(Runtime, logger, options.verbose ?? false);
     const answer = await raceWithDisconnect(waitForAssistantResponse(Runtime, config.timeoutMs, logger));
@@ -734,6 +734,7 @@ async function runRemoteBrowserMode(
       logger(`Prompt textarea ready (after model switch, ${promptText.length.toLocaleString()} chars queued)`);
     }
 
+    const attachmentNames = attachments.map((a) => path.basename(a.path));
     if (attachments.length > 0) {
       if (!DOM) {
         throw new Error('Chrome DOM domain unavailable while uploading attachments.');
@@ -744,11 +745,9 @@ async function runRemoteBrowserMode(
         await uploadAttachmentViaDataTransfer({ runtime: Runtime, dom: DOM }, attachment, logger);
       }
       const waitBudget = Math.max(config.inputTimeoutMs ?? 30_000, 30_000);
-      await waitForAttachmentCompletion(Runtime, waitBudget, logger);
+      await waitForAttachmentCompletion(Runtime, waitBudget, attachmentNames, logger);
       logger('All attachments uploaded');
     }
-
-    const attachmentNames = attachments.map((a) => path.basename(a.path));
     await submitPrompt({ runtime: Runtime, input: Input, attachmentNames }, promptText, logger);
     stopThinkingMonitor = startThinkingStatusMonitor(Runtime, logger, options.verbose ?? false);
     const answer = await waitForAssistantResponse(Runtime, config.timeoutMs, logger);
