@@ -6,6 +6,7 @@
 - Docs: README now explicitly warns against `pnpx @steipete/oracle` (pnpx cache breaks sqlite bindings); use `npx -y @steipete/oracle` instead. Thanks Xuanwo for flagging this.
 
 ### Fixed
+- API fallback: gpt-5.1-pro API runs now correctly downgrade to gpt-5-pro (was gpt-5.0-pro, which 404s on the Responses API).
 - Browser uploads: detect ChatGPT’s composer attachment chip (not echoed in the last user turn) to avoid false “Attachment did not appear” failures. Thanks Mariano Belinky (@mbelinky) for the fix.
 - Browser interruption: if the user/agent sends SIGINT/SIGTERM/SIGQUIT while the assistant response is still pending, Oracle leaves Chrome running, writes runtime hints, and logs how to reattach with `oracle session <slug>` instead of killing the browser mid-run.
 - API runs: requests for `gpt-5.1-pro` automatically downgrade to `gpt-5-pro` with a one-line notice because 5.1 Pro isn’t available via API yet.
