@@ -130,19 +130,19 @@ export const GEMINI_MODEL_OPTION_SELECTORS = {
 };
 
 // Tools button selector - opens the tools drawer
-// Verified from live testing Dec 2024
-export const GEMINI_TOOLS_BUTTON_SELECTOR = 'button:has-text("Tools")';
+// Updated Dec 2024: Uses Angular Material toolbox-drawer component
+export const GEMINI_TOOLS_BUTTON_SELECTOR = 'button.toolbox-drawer-button, toolbox-drawer button';
 
 // Tools drawer item selectors
 // Accessed via Tools button → select tool from drawer
-// Verified from live testing Dec 2024
+// Updated Dec 2024: Uses toolbox-drawer-item with .label elements
 export const GEMINI_TOOL_SELECTORS = {
-  'deep-research': 'button:has-text("Deep Research")',
-  'create-videos': 'button:has-text("Create videos")',
-  'create-images': 'button:has-text("Create images")',
-  'canvas': 'button:has-text("Canvas")',
-  'guided-learning': 'button:has-text("Guided Learning")',
-  'deep-think': 'button:has-text("Deep Think")',
+  'deep-research': '.label:has-text("Deep Research")',
+  'create-videos': '.label:has-text("Create videos")',
+  'create-images': '.label:has-text("Create images")',
+  'canvas': '.label:has-text("Canvas")',
+  'guided-learning': '.label:has-text("Guided Learning")',
+  'deep-think': '.label:has-text("Deep Think")',
 } as const;
 
 // Tool deselection button selectors (appear when tool is active)
