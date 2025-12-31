@@ -24,6 +24,8 @@ export interface SlideOptions {
   length?: SlideLength;
   /** Custom prompt (overrides audience preset) */
   customPrompt?: string;
+  /** Batch mode: generate slides for multiple audiences at once */
+  batchAudiences?: SlideAudience[];
 }
 
 // Audio options
@@ -169,6 +171,8 @@ export interface ArtifactStatus {
 export interface NotebookLMRunResult extends BrowserRunResult {
   /** Downloaded artifact information */
   artifact?: ArtifactDownloadResult;
+  /** Multiple artifacts for batch mode */
+  artifacts?: ArtifactDownloadResult[];
   /** Type of artifact that was generated */
   artifactType: ArtifactType;
   /** Time taken for generation in ms */

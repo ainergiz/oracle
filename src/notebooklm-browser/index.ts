@@ -48,7 +48,7 @@ import {
   waitForNewNotebookReady,
   handleUploadDialog,
 } from './actions/notebookCreation.js';
-import { generateSlides } from './actions/slideGeneration.js';
+import { generateSlides, batchGenerateSlides } from './actions/slideGeneration.js';
 import { generateAudio } from './actions/audioGeneration.js';
 import { generateVideo } from './actions/videoGeneration.js';
 import { generateInfographic } from './actions/infographicGeneration.js';
@@ -288,23 +288,43 @@ export async function runNotebookLMBrowserMode(
     // Get options for the specific artifact type
     const genOptions = options.options ?? {};
     const outputDir = config.outputDir ?? process.cwd();
+    let artifacts: ArtifactDownloadResult[] = [];
 
     // Generate the requested artifact type
     switch (artifactType) {
-      case 'slides':
-        artifact = await generateSlides(client, genOptions.slides ?? {}, outputDir, logger);
+      case 'slides': {
+        const slideOpts = genOptions.slides ?? {};
+        // Check for batch mode
+        if (slideOpts.batchAudiences && slideOpts.batchAudiences.length > 0) {
+          logger(`Batch mode: generating ${slideOpts.batchAudiences.length} slide decks`);
+          artifacts = await batchGenerateSlides(
+            client,
+            slideOpts.batchAudiences,
+            { format: slideOpts.format, length: slideOpts.length },
+            outputDir,
+            logger,
+          );
+          artifact = artifacts[0] ?? null;
+        } else {
+          artifact = await generateSlides(client, slideOpts, outputDir, logger);
+          if (artifact) artifacts = [artifact];
+        }
         break;
+      }
 
       case 'audio':
         artifact = await generateAudio(client, genOptions.audio ?? {}, outputDir, logger);
+        if (artifact) artifacts = [artifact];
         break;
 
       case 'video':
         artifact = await generateVideo(client, genOptions.video ?? {}, outputDir, logger);
+        if (artifact) artifacts = [artifact];
         break;
 
       case 'infographic':
         artifact = await generateInfographic(client, genOptions.infographic ?? {}, outputDir, logger);
+        if (artifact) artifacts = [artifact];
         break;
 
       default:
@@ -314,9 +334,13 @@ export async function runNotebookLMBrowserMode(
     runStatus = 'complete';
 
     const durationMs = Date.now() - startedAt;
+    const resultText = artifacts.length > 1
+      ? `Generated ${artifacts.length} ${artifactType} artifacts`
+      : artifact ? `Generated ${artifactType}: ${artifact.filename}` : '';
+
     return {
-      answerText: artifact ? `Generated ${artifactType}: ${artifact.filename}` : '',
-      answerMarkdown: artifact ? `Generated ${artifactType}: ${artifact.filename}` : '',
+      answerText: resultText,
+      answerMarkdown: resultText,
       tookMs: durationMs,
       answerTokens: 0,
       answerChars: 0,
@@ -325,6 +349,7 @@ export async function runNotebookLMBrowserMode(
       userDataDir,
       controllerPid: process.pid,
       artifact: artifact ?? undefined,
+      artifacts: artifacts.length > 0 ? artifacts : undefined,
       artifactType,
       generationTimeMs: durationMs,
       notebookReady: true,

@@ -261,14 +261,13 @@ export async function downloadLatestArtifact(
   let finalPath = download.path;
   let finalFilename = download.filename;
 
-  if (prefix) {
-    finalFilename = formatFilename(download.filename, prefix);
-    finalPath = path.join(outputDir, finalFilename);
+  // Always format to ensure proper extension, even without prefix
+  finalFilename = formatFilename(download.filename, prefix, artifactType);
+  finalPath = path.join(outputDir, finalFilename);
 
-    if (download.path !== finalPath) {
-      fs.renameSync(download.path, finalPath);
-      logger(`Renamed to: ${finalFilename}`);
-    }
+  if (download.path !== finalPath) {
+    fs.renameSync(download.path, finalPath);
+    logger(`Renamed to: ${finalFilename}`);
   }
 
   return {
@@ -281,12 +280,15 @@ export async function downloadLatestArtifact(
 
 /**
  * Download all artifacts of a given type
+ * @param audiences Optional array of audience names to use as prefixes (for batch downloads)
+ * @param startIndex Start downloading from this index (skip earlier artifacts)
  */
 export async function downloadAllArtifacts(
   client: ChromeClient,
   artifactType: ArtifactType,
   outputDir: string,
-  prefix: string,
+  audiences: (string | undefined)[] | string,
+  startIndex: number = 0,
   logger: BrowserLogger,
   skipLoading: boolean = true,
 ): Promise<ArtifactDownloadResult[]> {
@@ -302,52 +304,81 @@ export async function downloadAllArtifacts(
     returnByValue: true,
   });
 
-  const count = (countResult.result?.value as number) || 0;
-  if (count === 0) {
-    logger('No artifacts to download');
+  const totalCount = (countResult.result?.value as number) || 0;
+  if (totalCount === 0 || totalCount <= startIndex) {
+    logger('No new artifacts to download');
     return [];
   }
 
-  const results: ArtifactDownloadResult[] = [];
+  // Handle both single prefix string and array of audience names
+  const audienceList = Array.isArray(audiences) ? audiences : null;
+  const singlePrefix = typeof audiences === 'string' ? audiences : null;
 
-  for (let i = 0; i < count; i++) {
+  const results: ArtifactDownloadResult[] = [];
+  const artifactsToDownload = totalCount - startIndex;
+
+  logger(`Downloading ${artifactsToDownload} artifacts (starting from index ${startIndex})`);
+
+  for (let i = startIndex; i < totalCount; i++) {
+    const relativeIndex = i - startIndex;
+
     // Check if artifact is still loading
     if (skipLoading) {
       const loadingResult = await Runtime.evaluate({
         expression: `(() => {
           const artifacts = document.querySelectorAll(${JSON.stringify(selector)});
           const artifact = artifacts[${i}];
-          if (!artifact) return false;
+          if (!artifact) return { loading: false };
+
           const parent = artifact.closest('.artifact-item-button');
-          return parent?.classList.contains('shimmer') ?? false;
+          if (!parent) return { loading: false };
+
+          // Check multiple loading indicators
+          const hasShimmer = Array.from(parent.classList).some(c => c.startsWith('shimmer'));
+          const titleEl = parent.querySelector('.artifact-title');
+          const isGenerating = titleEl?.textContent?.toLowerCase().includes('generating');
+          const hasSyncIcon = !!parent.querySelector('mat-icon.rotate');
+
+          return { loading: hasShimmer || isGenerating || hasSyncIcon };
         })()`,
         returnByValue: true,
       });
 
-      if (loadingResult.result?.value === true) {
-        logger(`[${i + 1}] Skipping (still loading)`);
+      const loadResult = loadingResult.result?.value as { loading: boolean } | undefined;
+      if (loadResult?.loading) {
+        logger(`[${relativeIndex + 1}/${artifactsToDownload}] Skipping (still loading)`);
         continue;
       }
     }
 
-    const indexedPrefix = prefix ? `${String(i + 1).padStart(2, '0')}_${prefix}` : String(i + 1).padStart(2, '0');
+    // Determine prefix based on audience list or single prefix
+    let prefix: string;
+    if (audienceList && audienceList[relativeIndex]) {
+      prefix = `${String(relativeIndex + 1).padStart(2, '0')}_${audienceList[relativeIndex]}`;
+    } else if (singlePrefix) {
+      prefix = `${String(relativeIndex + 1).padStart(2, '0')}_${singlePrefix}`;
+    } else {
+      prefix = String(relativeIndex + 1).padStart(2, '0');
+    }
+
+    logger(`[${relativeIndex + 1}/${artifactsToDownload}] Downloading...`);
 
     // Trigger download for this specific artifact
     const triggered = await triggerArtifactDownload(Runtime, artifactType, i, logger);
     if (!triggered) {
-      logger(`[${i + 1}] Failed to trigger download`);
+      logger(`[${relativeIndex + 1}/${artifactsToDownload}] Failed to trigger download`);
       continue;
     }
 
     // Wait for download
     const download = await waitForDownload(Browser, outputDir, logger);
     if (!download) {
-      logger(`[${i + 1}] Download timeout`);
+      logger(`[${relativeIndex + 1}/${artifactsToDownload}] Download timeout`);
       continue;
     }
 
-    // Rename with indexed prefix
-    const finalFilename = formatFilename(download.filename, indexedPrefix);
+    // Rename with prefix and ensure proper extension
+    const finalFilename = formatFilename(download.filename, prefix, artifactType);
     const finalPath = path.join(outputDir, finalFilename);
 
     if (download.path !== finalPath) {
@@ -365,26 +396,46 @@ export async function downloadAllArtifacts(
     await delay(500);
   }
 
-  logger(`Downloaded ${results.length}/${count} artifacts`);
+  logger(`Downloaded ${results.length}/${artifactsToDownload} artifacts`);
   return results;
 }
 
 /**
- * Format filename with prefix
+ * Default file extensions for each artifact type
+ * NotebookLM sometimes returns files without extensions
  */
-function formatFilename(suggested: string, prefix: string): string {
-  if (!prefix) return suggested;
+const ARTIFACT_EXTENSIONS: Record<ArtifactType, string> = {
+  slides: '.pdf',
+  audio: '.wav',
+  video: '.mp4',
+  infographic: '.png',
+};
 
+/**
+ * Format filename with prefix and ensure proper extension
+ */
+function formatFilename(suggested: string, prefix: string, artifactType?: ArtifactType): string {
   // Clean prefix (replace spaces with underscores)
-  const cleanPrefix = prefix.replace(/\s+/g, '_');
+  const cleanPrefix = prefix ? prefix.replace(/\s+/g, '_') : '';
 
-  // Split name and extension
+  // Check if file already has an extension
   const lastDot = suggested.lastIndexOf('.');
-  if (lastDot > 0) {
-    const name = suggested.slice(0, lastDot);
-    const ext = suggested.slice(lastDot + 1);
-    return `${cleanPrefix}_${name}.${ext}`;
+  const hasExtension = lastDot > 0 && lastDot > suggested.length - 6; // Extension should be short
+
+  let name: string;
+  let ext: string;
+
+  if (hasExtension) {
+    name = suggested.slice(0, lastDot);
+    ext = suggested.slice(lastDot); // includes the dot
+  } else {
+    // No extension - add default based on artifact type
+    name = suggested;
+    ext = artifactType ? ARTIFACT_EXTENSIONS[artifactType] : '';
   }
 
-  return `${cleanPrefix}_${suggested}`;
+  if (cleanPrefix) {
+    return `${cleanPrefix}_${name}${ext}`;
+  }
+  return `${name}${ext}`;
 }

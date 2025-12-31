@@ -30,8 +30,8 @@ export async function countArtifacts(
 }
 
 /**
- * Check if a specific artifact is still loading (shimmer animation active)
- * NotebookLM uses a 'shimmer' CSS class on the parent container during loading
+ * Check if a specific artifact is still loading
+ * NotebookLM uses shimmer-* CSS classes, disabled button state, and "Generating" text
  */
 export async function isArtifactLoading(
   Runtime: ChromeClient['Runtime'],
@@ -52,17 +52,45 @@ export async function isArtifactLoading(
 
       const artifact = artifacts[idx];
 
-      // Check if parent container has shimmer class
+      // Check parent container
       const parent = artifact.closest('.artifact-item-button');
       if (!parent) return { found: true, loading: false };
 
-      const hasShimmer = parent.classList.contains('shimmer');
-      return { found: true, loading: hasShimmer };
+      // Multiple loading indicators to check:
+
+      // 1. Shimmer class (can be shimmer, shimmer-yellow, shimmer-blue, etc.)
+      const hasShimmer = Array.from(parent.classList).some(c => c.startsWith('shimmer'));
+
+      // 2. Button is disabled
+      const button = parent.querySelector('button');
+      const isDisabled = button?.disabled || button?.classList.contains('mat-mdc-button-disabled');
+
+      // 3. Title contains "Generating"
+      const titleEl = parent.querySelector('.artifact-title');
+      const titleText = titleEl?.textContent?.toLowerCase() || '';
+      const isGenerating = titleText.includes('generating');
+
+      // 4. Has rotating sync icon
+      const syncIcon = parent.querySelector('mat-icon.rotate');
+      const hasSyncIcon = !!syncIcon;
+
+      // Loading if ANY of these are true
+      const loading = hasShimmer || isGenerating || hasSyncIcon;
+
+      return {
+        found: true,
+        loading,
+        indicators: { hasShimmer, isDisabled, isGenerating, hasSyncIcon }
+      };
     })()`,
     returnByValue: true,
   });
 
-  const outcome = result?.value as { found?: boolean; loading?: boolean } | undefined;
+  const outcome = result?.value as {
+    found?: boolean;
+    loading?: boolean;
+    indicators?: { hasShimmer: boolean; isDisabled: boolean; isGenerating: boolean; hasSyncIcon: boolean };
+  } | undefined;
   return outcome?.loading ?? false;
 }
 
@@ -84,7 +112,15 @@ export async function getArtifactStatus(
       let loadingCount = 0;
       for (const artifact of artifacts) {
         const parent = artifact.closest('.artifact-item-button');
-        if (parent && parent.classList.contains('shimmer')) {
+        if (!parent) continue;
+
+        // Check multiple loading indicators
+        const hasShimmer = Array.from(parent.classList).some(c => c.startsWith('shimmer'));
+        const titleEl = parent.querySelector('.artifact-title');
+        const isGenerating = titleEl?.textContent?.toLowerCase().includes('generating');
+        const hasSyncIcon = !!parent.querySelector('mat-icon.rotate');
+
+        if (hasShimmer || isGenerating || hasSyncIcon) {
           loadingCount++;
         }
       }
@@ -235,9 +271,15 @@ export async function getArtifactInfo(
       const titleEl = artifact.querySelector('.artifact-title');
       const title = titleEl ? titleEl.textContent?.trim() : 'Untitled';
 
-      // Check loading state
+      // Check loading state using multiple indicators
       const parent = artifact.closest('.artifact-item-button');
-      const loading = parent ? parent.classList.contains('shimmer') : false;
+      let loading = false;
+      if (parent) {
+        const hasShimmer = Array.from(parent.classList).some(c => c.startsWith('shimmer'));
+        const isGenerating = title?.toLowerCase().includes('generating');
+        const hasSyncIcon = !!parent.querySelector('mat-icon.rotate');
+        loading = hasShimmer || isGenerating || hasSyncIcon;
+      }
 
       return {
         title: title || 'Untitled',

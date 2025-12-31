@@ -403,109 +403,170 @@ export async function uploadSourcesWithInput(
         continue;
       }
 
-      // Use CDP Input.insertText to type the content - this triggers proper events
+      // Use CDP Input.insertText to type the content
       const { Input } = client;
       if (Input) {
         logger('Using CDP Input.insertText to fill textarea...');
         await Input.insertText({ text: content });
-        await delay(500);
       } else {
-        // Fallback: use clipboard paste simulation
-        logger('Input domain not available, using paste simulation...');
-        const escapedContent = content
-          .replace(/\\/g, '\\\\')
-          .replace(/`/g, '\\`')
-          .replace(/\$/g, '\\$');
-
-        await Runtime.evaluate({
-          expression: `(() => {
-            const textarea = document.querySelector('textarea[formcontrolname="text"]');
-            if (textarea) {
-              textarea.value = \`${escapedContent}\`;
-              // Simulate proper input event sequence
-              textarea.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, inputType: 'insertText', data: textarea.value }));
-              textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: textarea.value }));
-              textarea.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          })()`,
-          returnByValue: true,
-        });
+        logger('Input domain not available, cannot insert text');
+        continue;
       }
 
-      // Wait for button to become enabled and click it
-      logger('Waiting for Insert button...');
+      // CRITICAL: Trigger blur and proper events IMMEDIATELY after typing
+      // Angular needs blur to mark field as "touched" which enables the button
+      await Runtime.evaluate({
+        expression: `(() => {
+          const textarea = document.querySelector('textarea[formcontrolname="text"]');
+          if (textarea) {
+            // Dispatch input event (marks as dirty)
+            textarea.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+            // Dispatch change event
+            textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            // Dispatch blur event (marks as touched - CRITICAL for Angular validation)
+            textarea.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+          }
+        })()`,
+        returnByValue: true,
+      });
+
+      // Wait for Angular to process the events and enable the button
+      logger('Waiting for Angular to enable Insert button...');
+      await delay(1000);
+
+      // Now click the Insert button
+      // Angular Material buttons need a proper MouseEvent, not just .click()
       let buttonClicked = false;
 
       for (let attempt = 0; attempt < 5 && !buttonClicked; attempt++) {
-        await delay(500);
-
-        const clickResult = await Runtime.evaluate({
+        // First check the form state
+        const stateResult = await Runtime.evaluate({
           expression: `(() => {
+            const form = document.querySelector('form');
             const textarea = document.querySelector('textarea[formcontrolname="text"]');
             const btn = document.querySelector('button[type="submit"]');
-            const form = document.querySelector('form');
 
-            const status = {
+            return {
               textLength: textarea?.value?.length || 0,
-              btnDisabled: btn?.disabled ?? true,
-              ngClasses: textarea?.className?.split(' ').filter(c => c.startsWith('ng-')).join(' ') || ''
+              formClasses: form?.className || '',
+              btnClasses: btn?.className || '',
+              btnText: btn?.textContent?.trim() || '',
             };
-
-            // If button is enabled, click it
-            if (btn && !btn.disabled) {
-              btn.click();
-              return { ...status, clicked: true, method: 'normal' };
-            }
-
-            // Trigger blur to make Angular validate
-            if (textarea && status.btnDisabled) {
-              textarea.blur();
-            }
-
-            // Check again
-            if (btn && !btn.disabled) {
-              btn.click();
-              return { ...status, clicked: true, method: 'after-blur' };
-            }
-
-            // Try form submit directly
-            if (form && textarea?.value?.length > 0) {
-              // Remove disabled from button first
-              if (btn) {
-                btn.removeAttribute('disabled');
-                btn.classList.remove('mat-mdc-button-disabled');
-              }
-              // Submit the form
-              form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-              if (btn) btn.click();
-              return { ...status, clicked: true, method: 'form-submit' };
-            }
-
-            return { ...status, clicked: false };
           })()`,
           returnByValue: true,
         });
 
-        const result = clickResult.result?.value as {
-          clicked?: boolean;
-          method?: string;
+        const state = stateResult.result?.value as {
           textLength?: number;
-          btnDisabled?: boolean;
-          ngClasses?: string;
+          formClasses?: string;
+          btnClasses?: string;
+          btnText?: string;
         } | undefined;
 
-        logger(`Attempt ${attempt + 1}: ${result?.textLength} chars, disabled: ${result?.btnDisabled}, ${result?.ngClasses}`);
+        logger(`Attempt ${attempt + 1}: ${state?.textLength} chars, form: ${state?.formClasses}, btn: "${state?.btnText}"`);
 
-        if (result?.clicked) {
-          logger(`Clicked Insert (${result.method})`);
+        // Use CDP Input.dispatchMouseEvent for a proper click
+        // First get the button position
+        const posResult = await Runtime.evaluate({
+          expression: `(() => {
+            // Find the Insert button specifically
+            const buttons = document.querySelectorAll('button[type="submit"], button.mat-mdc-unelevated-button');
+            for (const btn of buttons) {
+              if (btn.textContent?.trim().toLowerCase() === 'insert') {
+                const rect = btn.getBoundingClientRect();
+                return {
+                  found: true,
+                  x: rect.x + rect.width / 2,
+                  y: rect.y + rect.height / 2,
+                  width: rect.width,
+                  height: rect.height,
+                };
+              }
+            }
+            return { found: false };
+          })()`,
+          returnByValue: true,
+        });
+
+        const pos = posResult.result?.value as {
+          found?: boolean;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+        } | undefined;
+
+        if (!pos?.found || pos.x === undefined || pos.y === undefined) {
+          logger('Insert button not found');
+          await delay(500);
+          continue;
+        }
+
+        logger(`Insert button at (${Math.round(pos.x)}, ${Math.round(pos.y)})`);
+
+        // Use CDP Input to simulate a real mouse click
+        const { Input } = client;
+        if (Input) {
+          await Input.dispatchMouseEvent({
+            type: 'mousePressed',
+            x: pos.x,
+            y: pos.y,
+            button: 'left',
+            clickCount: 1,
+          });
+          await Input.dispatchMouseEvent({
+            type: 'mouseReleased',
+            x: pos.x,
+            y: pos.y,
+            button: 'left',
+            clickCount: 1,
+          });
+          logger('Dispatched mouse click via CDP');
           buttonClicked = true;
           successCount++;
-          await delay(5000); // Wait for source to be processed
+          // Wait for source to be processed
+          await delay(3000);
+          break;
+        } else {
+          // Fallback: try direct click with MouseEvent
+          const clickResult = await Runtime.evaluate({
+            expression: `(() => {
+              const buttons = document.querySelectorAll('button[type="submit"], button.mat-mdc-unelevated-button');
+              for (const btn of buttons) {
+                if (btn.textContent?.trim().toLowerCase() === 'insert') {
+                  // Create proper MouseEvent
+                  const rect = btn.getBoundingClientRect();
+                  const event = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: rect.x + rect.width / 2,
+                    clientY: rect.y + rect.height / 2,
+                  });
+                  btn.dispatchEvent(event);
+                  return { clicked: true };
+                }
+              }
+              return { clicked: false };
+            })()`,
+            returnByValue: true,
+          });
+
+          const outcome = clickResult.result?.value as { clicked?: boolean } | undefined;
+          if (outcome?.clicked) {
+            logger('Clicked Insert button via MouseEvent');
+            buttonClicked = true;
+            successCount++;
+            await delay(3000);
+            break;
+          }
         }
+
+        await delay(500);
       }
 
       if (!buttonClicked) {
-        logger('Could not click Insert button');
+        logger('Could not submit form');
       }
 
     } catch (error) {
