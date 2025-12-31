@@ -80,9 +80,11 @@ export async function openCustomizeDialog(
 
 /**
  * Wait for the customization dialog to appear
+ * @param expectedText Optional text to verify dialog content (e.g., "Customise" or "Customize")
  */
 export async function waitForDialog(
   Runtime: ChromeClient['Runtime'],
+  expectedText?: string,
   timeoutMs: number = 5000,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -91,13 +93,30 @@ export async function waitForDialog(
     const { result } = await Runtime.evaluate({
       expression: `(() => {
         const dialog = document.querySelector('mat-dialog-container');
-        return dialog && dialog.offsetParent !== null;
+        if (!dialog || dialog.offsetParent === null) return { visible: false };
+
+        const dialogText = dialog.textContent?.toLowerCase() || '';
+        return {
+          visible: true,
+          text: dialogText.slice(0, 100) // First 100 chars for debugging
+        };
       })()`,
       returnByValue: true,
     });
 
-    if (result?.value) {
-      return true;
+    const outcome = result?.value as { visible?: boolean; text?: string } | undefined;
+
+    if (outcome?.visible) {
+      // If expectedText provided, verify dialog contains it
+      if (expectedText) {
+        const hasExpectedText = outcome.text?.includes(expectedText.toLowerCase());
+        if (hasExpectedText) {
+          return true;
+        }
+        // Dialog visible but wrong content, keep waiting
+      } else {
+        return true;
+      }
     }
     await delay(100);
   }
@@ -399,38 +418,89 @@ export async function clickGenerateButton(
       const dialog = document.querySelector('mat-dialog-container');
       if (!dialog) return { clicked: false, reason: 'no dialog' };
 
-      // Find Generate button
-      const buttons = dialog.querySelectorAll('button');
-      for (const btn of buttons) {
-        const text = btn.textContent?.toLowerCase() || '';
-        if (text.includes('generate')) {
-          btn.click();
-          return { clicked: true };
+      // Get all buttons for debugging
+      const buttons = Array.from(dialog.querySelectorAll('button'));
+      const buttonInfo = buttons.map(b => ({
+        text: b.textContent?.trim(),
+        disabled: b.disabled,
+        classes: b.className
+      }));
+
+      // Buttons to skip (not generation actions)
+      const skipPatterns = ['cancel', 'close', 'insert', 'submit', 'save', 'back'];
+
+      // Helper to check if button should be skipped
+      const shouldSkip = (text) => skipPatterns.some(p => text.includes(p));
+
+      // Search patterns in order of preference - ONLY look for generate
+      const patterns = ['generate'];
+
+      for (const pattern of patterns) {
+        for (const btn of buttons) {
+          const text = btn.textContent?.toLowerCase().trim() || '';
+          if (btn.disabled) continue;
+          if (shouldSkip(text)) continue;
+
+          if (text.includes(pattern)) {
+            btn.click();
+            return { clicked: true, text: btn.textContent?.trim(), buttons: buttonInfo };
+          }
         }
       }
 
-      // Fallback: try primary/accent colored button
+      // Try aria-label match for "generate" only
       for (const btn of buttons) {
-        if (btn.classList.contains('mat-primary') || btn.classList.contains('mat-accent')) {
+        if (btn.disabled) continue;
+        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+        if (ariaLabel.includes('generate')) {
           btn.click();
-          return { clicked: true, fallback: true };
+          return { clicked: true, text: btn.textContent?.trim(), via: 'aria-label', buttons: buttonInfo };
         }
       }
 
-      return { clicked: false, reason: 'no generate button' };
+      // Try Material button with primary color attribute BUT only if text contains 'generate' or dialog has 'customise'
+      // First check if this is a customization dialog
+      const dialogText = dialog.textContent?.toLowerCase() || '';
+      const isCustomiseDialog = dialogText.includes('customise') || dialogText.includes('customize');
+
+      if (isCustomiseDialog) {
+        for (const btn of buttons) {
+          if (btn.disabled) continue;
+          const text = btn.textContent?.toLowerCase().trim() || '';
+          if (shouldSkip(text)) continue;
+
+          const color = btn.getAttribute('color');
+          if (color === 'primary' || color === 'accent') {
+            btn.click();
+            return { clicked: true, text: btn.textContent?.trim(), via: 'primary-in-customise-dialog', buttons: buttonInfo };
+          }
+        }
+      }
+
+      return { clicked: false, reason: 'no generate button found', buttons: buttonInfo };
     })()`,
     returnByValue: true,
   });
 
-  const outcome = result?.value as { clicked?: boolean; reason?: string; fallback?: boolean } | undefined;
+  const outcome = result?.value as {
+    clicked?: boolean;
+    reason?: string;
+    text?: string;
+    via?: string;
+    buttons?: Array<{ text: string; disabled: boolean; classes: string }>;
+  } | undefined;
 
   if (outcome?.clicked) {
-    logger(outcome.fallback ? 'Clicked primary button (fallback)' : 'Clicked Generate button');
+    const method = outcome.via ? ` (via ${outcome.via})` : '';
+    logger(`Clicked button: "${outcome.text}"${method}`);
     await delay(500); // Wait for dialog to close
     return true;
   }
 
   logger(`Could not click Generate: ${outcome?.reason}`);
+  if (outcome?.buttons?.length) {
+    logger(`Available buttons: ${JSON.stringify(outcome.buttons)}`);
+  }
   return false;
 }
 
