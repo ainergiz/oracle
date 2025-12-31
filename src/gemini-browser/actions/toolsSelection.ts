@@ -69,23 +69,38 @@ export async function openToolsDrawer(
   const { result } = await runtime.evaluate({
     expression: `
       (function() {
-        // Find Tools button
+        // Try specific toolbox-drawer button first (Angular Material component)
+        const toolboxBtn = document.querySelector('button.toolbox-drawer-button');
+        if (toolboxBtn) {
+          toolboxBtn.click();
+          return { found: true, method: 'toolbox-drawer-button' };
+        }
+
+        // Try button inside toolbox-drawer component
+        const drawerBtn = document.querySelector('toolbox-drawer button');
+        if (drawerBtn) {
+          drawerBtn.click();
+          return { found: true, method: 'toolbox-drawer > button' };
+        }
+
+        // Fallback: Find any button with "Tools" text
         const buttons = document.querySelectorAll('button');
         for (const btn of buttons) {
           const text = btn.textContent?.trim() || '';
           if (text === 'Tools' || btn.getAttribute('aria-label')?.includes('Tools')) {
             btn.click();
-            return true;
+            return { found: true, method: 'text-match' };
           }
         }
-        return false;
+        return { found: false };
       })()
     `,
     returnByValue: true,
   });
 
-  if (result.value === true) {
-    logger('[gemini-browser] Opened Tools drawer');
+  const outcome = result.value as { found: boolean; method?: string } | undefined;
+  if (outcome?.found) {
+    logger(`[gemini-browser] Opened Tools drawer via ${outcome.method}`);
     await delay(500); // Wait for drawer animation
     return true;
   }
@@ -102,29 +117,64 @@ export async function selectToolFromDrawer(
   toolId: GeminiTool,
   logger: BrowserLogger,
 ): Promise<boolean> {
-  const toolName = GEMINI_TOOL_SELECTORS[toolId]?.replace('button:has-text("', '').replace('")', '') || toolId;
+  // Map tool ID to display name
+  const toolNameMap: Record<string, string> = {
+    'deep-think': 'Deep Think',
+    'deep-research': 'Deep Research',
+    'create-images': 'Create images',
+    'create-videos': 'Create videos',
+    'canvas': 'Canvas',
+    'guided-learning': 'Guided Learning',
+  };
+  const toolName = toolNameMap[toolId] || toolId;
 
   const { result } = await runtime.evaluate({
     expression: `
       (function() {
         const toolName = "${toolName}";
-        // Find tool button in drawer
-        const buttons = document.querySelectorAll('button');
-        for (const btn of buttons) {
-          const text = btn.textContent?.trim() || '';
-          if (text.includes(toolName)) {
-            btn.click();
-            return true;
+
+        // Method 1: Find toolbox-drawer-item with matching label
+        const drawerItems = document.querySelectorAll('toolbox-drawer-item');
+        for (const item of drawerItems) {
+          const label = item.querySelector('.label');
+          if (label && label.textContent?.trim() === toolName) {
+            const btn = item.querySelector('button');
+            if (btn && !btn.disabled) {
+              btn.click();
+              return { found: true, method: 'drawer-item-label' };
+            }
           }
         }
-        return false;
+
+        // Method 2: Find button with toolbox-drawer-item-list-button class containing the tool name
+        const itemButtons = document.querySelectorAll('button.toolbox-drawer-item-list-button');
+        for (const btn of itemButtons) {
+          const text = btn.textContent?.trim() || '';
+          if (text.includes(toolName) && !btn.disabled) {
+            btn.click();
+            return { found: true, method: 'item-list-button' };
+          }
+        }
+
+        // Method 3: Find any button containing the tool name
+        const allButtons = document.querySelectorAll('button');
+        for (const btn of allButtons) {
+          const text = btn.textContent?.trim() || '';
+          if (text.includes(toolName) && !btn.disabled) {
+            btn.click();
+            return { found: true, method: 'text-match' };
+          }
+        }
+
+        return { found: false };
       })()
     `,
     returnByValue: true,
   });
 
-  if (result.value === true) {
-    logger(`[gemini-browser] Selected tool: ${toolName}`);
+  const outcome = result.value as { found: boolean; method?: string } | undefined;
+  if (outcome?.found) {
+    logger(`[gemini-browser] Selected tool: ${toolName} via ${outcome.method}`);
     await delay(500); // Wait for tool activation
     return true;
   }
