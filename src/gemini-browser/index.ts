@@ -113,6 +113,7 @@ export async function runGeminiBrowserMode(
     inputTimeoutMs: config.inputTimeoutMs ?? GEMINI_TIMEOUTS.promptReady,
     cookieSync: config.cookieSync ?? true,
     cookieNames: config.cookieNames ?? null,
+    cookieSyncWaitMs: 0,
     inlineCookies: config.inlineCookies ?? null,
     inlineCookiesSource: config.inlineCookiesSource ?? null,
     headless: config.headless ?? false,
