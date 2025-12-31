@@ -172,54 +172,58 @@ export async function readGeminiResponse(
 export async function readThinkingStatus(
   Runtime: ChromeClient['Runtime'],
 ): Promise<GeminiThinkingStatus> {
-  const thinkingSelectorsJson = JSON.stringify(GEMINI_THINKING_SELECTORS);
-
   const { result } = await Runtime.evaluate({
     expression: `(() => {
-      const selectors = ${thinkingSelectorsJson};
+      // Phrases that indicate COMPLETED thinking (should return NOT thinking)
+      const completedPhrases = ['show thinking', 'hide thinking', 'view thinking'];
 
-      // Keywords that indicate active thinking
-      const thinkingKeywords = [
-        'thinking', 'reasoning', 'analyzing', 'processing',
-        'generating', 'working', 'computing', 'understanding',
+      // Phrases that indicate ACTIVE thinking
+      const activeThinkingPhrases = [
+        'analyzing', 'processing', 'reasoning about', 'working on',
+        'generating', 'computing', 'understanding', 'evaluating',
+        'considering', 'formulating',
       ];
 
-      for (const selector of selectors) {
-        try {
-          const elements = document.querySelectorAll(selector);
-          for (const el of elements) {
-            if (!(el instanceof HTMLElement)) continue;
+      // Check for active thinking indicators (NOT the "Show thinking" button)
+      const thinkingIndicators = document.querySelectorAll(
+        '[data-testid*="thinking"], [data-testid*="reasoning"], ' +
+        '.thinking-indicator, .reasoning-progress, ' +
+        '[data-status="thinking"], [data-status="reasoning"], ' +
+        '[aria-label*="Analyzing"], [aria-label*="Processing"]'
+      );
 
-            // Check visibility
-            const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden') continue;
+      for (const el of thinkingIndicators) {
+        if (!(el instanceof HTMLElement)) continue;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
 
-            const text = el.textContent?.trim().toLowerCase() || '';
-            const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+        const text = (el.textContent?.trim() || '').toLowerCase();
 
-            const isThinking = thinkingKeywords.some(keyword =>
-              text.includes(keyword) || ariaLabel.includes(keyword)
-            );
+        // Skip if this is the "Show thinking" button (indicates thinking is DONE)
+        if (completedPhrases.some(phrase => text.includes(phrase))) continue;
 
-            if (isThinking) {
-              return {
-                isThinking: true,
-                phase: 'thinking',
-                message: el.textContent?.trim() || 'Thinking...',
-              };
-            }
-          }
-        } catch {}
+        // Check for active thinking phrases
+        if (activeThinkingPhrases.some(phrase => text.includes(phrase))) {
+          return {
+            isThinking: true,
+            phase: 'thinking',
+            message: el.textContent?.trim() || 'Thinking...',
+          };
+        }
       }
 
-      // Check for loading indicators (spinner, shimmer, etc.)
+      // Check for loading indicators (spinner, shimmer, progressbar)
       const loadingIndicators = document.querySelectorAll(
-        '.loading, .spinner, [role="progressbar"], .shimmer, [aria-busy="true"]'
+        '.loading-shimmer, [role="progressbar"]:not([aria-valuenow="100"]), ' +
+        '[aria-busy="true"], .response-loading'
       );
       for (const el of loadingIndicators) {
-        if (el instanceof HTMLElement) {
-          const style = window.getComputedStyle(el);
-          if (style.display !== 'none' && style.visibility !== 'hidden') {
+        if (!(el instanceof HTMLElement)) continue;
+        const style = window.getComputedStyle(el);
+        if (style.display !== 'none' && style.visibility !== 'hidden') {
+          // Double-check it's actually a loading state
+          const text = (el.textContent?.trim() || '').toLowerCase();
+          if (!completedPhrases.some(phrase => text.includes(phrase))) {
             return {
               isThinking: true,
               phase: 'loading',
@@ -286,57 +290,14 @@ async function isResponseGenerating(Runtime: ChromeClient['Runtime']): Promise<b
 
 /**
  * Capture response as markdown (if copy button available)
+ * Note: This is optional - we skip clipboard access to avoid permission dialogs
  */
 export async function captureGeminiMarkdown(
   Runtime: ChromeClient['Runtime'],
-  logger: BrowserLogger,
+  _logger: BrowserLogger,
 ): Promise<string | null> {
-  // Try to use copy button if available
-  const { result } = await Runtime.evaluate({
-    expression: `(async () => {
-      // Find copy button
-      const copyBtn = document.querySelector(
-        'button[aria-label*="Copy"], button[data-testid="copy-button"], ' +
-        'button[aria-label*="copy"], button.copy-button'
-      );
-
-      if (!copyBtn || !(copyBtn instanceof HTMLElement)) {
-        return { success: false, reason: 'no-copy-button' };
-      }
-
-      // Clear clipboard
-      try {
-        await navigator.clipboard.writeText('');
-      } catch {}
-
-      // Click copy button
-      copyBtn.click();
-
-      // Wait a bit for clipboard to update
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Read clipboard
-      try {
-        const text = await navigator.clipboard.readText();
-        if (text && text.length > 0) {
-          return { success: true, text };
-        }
-      } catch (err) {
-        return { success: false, reason: 'clipboard-read-failed' };
-      }
-
-      return { success: false, reason: 'empty-clipboard' };
-    })()`,
-    awaitPromise: true,
-    returnByValue: true,
-  });
-
-  const outcome = result?.value as { success?: boolean; text?: string; reason?: string } | undefined;
-
-  if (outcome?.success && outcome.text) {
-    logger('Captured markdown via copy button');
-    return outcome.text;
-  }
-
+  // Skip clipboard-based capture to avoid permission dialogs
+  // The response text from readGeminiResponse is sufficient
+  // If we need markdown in the future, we can parse the HTML directly
   return null;
 }
